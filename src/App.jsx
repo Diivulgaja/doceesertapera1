@@ -2,13 +2,17 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
   ShoppingCart, Plus, Minus, X, Home, ChevronRight, Truck, MapPin,
-  Loader2, Cake, Heart, Trash2, Check, Clock, Utensils, Star, Phone
+  Loader2, Cake, Heart, Trash2, Check, Clock, Utensils, Star, Phone,
+  QrCode, Copy, CreditCard
 } from "lucide-react";
 
 /* ------------- CONFIGURAÇÕES ------------- */
 const COLLECTION_ORDERS = "doceeser_pedidos";
 const DELIVERY_FEE = 2.99;
 const ETA_TEXT = "20–35 min";
+
+// ⚠️ IMPORTANTE: Em produção, use Edge Functions para esconder esta chave!
+const ABACATE_API_KEY = "sk_test_..."; // Coloque sua chave API da AbacatePay aqui
 
 // Chaves do Supabase
 const SUPABASE_URL = 'https://elpinlotdogazhpdwlqr.supabase.co';
@@ -179,6 +183,11 @@ export default function App() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [acaiModalProduct, setAcaiModalProduct] = useState(null);
   
+  // Estado do Pagamento
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
+  
   // Dados do pedido
   const [customer, setCustomer] = useState({ nome: '', telefone: '', rua: '', numero: '', bairro: '' });
   const [lastOrderId, setLastOrderId] = useState(null);
@@ -219,12 +228,78 @@ export default function App() {
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const finalTotal = cartTotal + DELIVERY_FEE;
 
-  // --- CHECKOUT ---
-  const handleCheckout = async () => {
-    if (!supabase) return alert("Sistema conectando... aguarde um momento.");
+  // --- INTEGRAÇÃO ABACATE PAY ---
+  const createAbacateCharge = async () => {
+    // Simulação caso não tenha chave configurada
+    if (ABACATE_API_KEY.includes("sk_test")) {
+       // Gera dados fake para visualização do layout
+       return {
+         pix: {
+           qrcode: "00020126580014BR.GOV.BCB.PIX0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913DOCE E SER6008BRASILIA62070503***630465F3",
+           copypaste: "00020126580014BR.GOV.BCB.PIX0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913DOCE E SER6008BRASILIA62070503***630465F3"
+         }
+       };
+    }
+
+    try {
+      const response = await fetch("https://api.abacatepay.com/v1/billing/create", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${ABACATE_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          frequency: "ONE_TIME",
+          methods: ["PIX"],
+          products: cart.map(item => ({
+            externalId: String(item.id),
+            name: item.name,
+            quantity: item.quantity,
+            price: Math.round(item.price * 100) // Em centavos
+          })),
+          returnUrl: window.location.href,
+          completionUrl: window.location.href,
+          customer: {
+            name: customer.nome,
+            phone: customer.telefone,
+            // email: "cliente@exemplo.com" // Ideal pedir email também
+          }
+        })
+      });
+      const data = await response.json();
+      return data.data?.billing;
+    } catch (error) {
+      console.error("Erro AbacatePay:", error);
+      alert("Erro ao gerar Pix. Verifique o console ou a chave API.");
+      return null;
+    }
+  };
+
+  // --- CHECKOUT FLOW ---
+  const handleInitiatePayment = async () => {
     if (!customer.nome || !customer.telefone || !customer.rua) {
       return alert("Por favor, preencha seus dados de entrega.");
     }
+    
+    setIsProcessingPayment(true);
+
+    // 1. Gera o Pix na AbacatePay
+    const billing = await createAbacateCharge();
+    
+    setIsProcessingPayment(false);
+
+    if (billing && billing.pix) {
+      setPaymentData(billing);
+      setPaymentModalOpen(true);
+    } else {
+      // Fallback: se falhar API (ou CORS), permite seguir manual? 
+      // Aqui vamos forçar o usuário a tentar de novo ou avisar.
+      alert("Não foi possível gerar o Pix automático. Tente novamente.");
+    }
+  };
+
+  const handleConfirmOrder = async () => {
+    if (!supabase) return;
 
     const orderId = `ord_${Date.now()}`;
     const payload = {
@@ -233,17 +308,21 @@ export default function App() {
       createdAt: new Date().toISOString(),
       total: finalTotal,
       items: cart,
-      customer: customer
+      customer: customer,
+      paymentMethod: 'PIX',
+      paymentStatus: 'Aguardando Confirmação' // Pode atualizar via webhook depois
     };
 
     const { error } = await supabase.from(COLLECTION_ORDERS).insert(payload);
     
     if (error) {
       console.error(error);
-      alert("Erro ao enviar pedido. Tente novamente.");
+      alert("Erro ao enviar pedido.");
     } else {
       setLastOrderId(orderId);
       setCart([]);
+      setPaymentModalOpen(false);
+      setPaymentData(null);
       setPage('tracking');
     }
   };
@@ -258,10 +337,7 @@ export default function App() {
           alt={product.name} 
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
         />
-        {/* Overlay gradiente */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-        
-        {/* Tag Categoria */}
         <div className="absolute top-3 left-3">
           <span className="px-3 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[10px] font-extrabold text-amber-800 shadow-sm uppercase tracking-wider border border-white/50">
             {categories[product.category]}
@@ -355,6 +431,66 @@ export default function App() {
               className="w-full bg-purple-700 text-white py-3.5 rounded-xl font-bold hover:bg-purple-800 transition shadow-lg shadow-purple-700/20 active:scale-[0.98]"
             >
               Adicionar ao Carrinho
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const PaymentModal = () => {
+    if (!paymentModalOpen || !paymentData) return null;
+
+    const copyToClipboard = () => {
+      navigator.clipboard.writeText(paymentData.pix.copypaste);
+      alert("Código Pix copiado!");
+    };
+
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+        <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-slideUp">
+          <div className="bg-green-600 p-6 text-center text-white relative overflow-hidden">
+             <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+             <CreditCard className="w-12 h-12 mx-auto mb-3 opacity-90" />
+             <h3 className="text-2xl font-bold">Pagamento via Pix</h3>
+             <p className="text-green-100 text-sm">Escaneie ou copie o código abaixo</p>
+          </div>
+
+          <div className="p-8 flex flex-col items-center">
+            {/* QR Code Placeholder (se a API retornar URL, use img src) */}
+            <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center mb-6 border-2 border-dashed border-gray-300 overflow-hidden relative group">
+               {/* Simulação de QR Code para Layout */}
+               <QrCode className="w-24 h-24 text-gray-300 absolute" />
+               <div className="absolute inset-0 flex flex-col items-center justify-center bg-white opacity-0 group-hover:opacity-10 text-xs font-bold text-gray-500">
+                  QR Code AbacatePay
+               </div>
+               {/* Se fosse imagem real: <img src={paymentData.pix.qrcode_image_url} ... /> */}
+               <div className="z-10 bg-white p-2 rounded-lg shadow-sm">
+                  {/* Como AbacatePay retorna string do QR, normalmente usa-se uma lib para gerar o canvas do QR. Aqui deixamos ilustrativo. */}
+                  <QrCode className="w-32 h-32 text-gray-800" />
+               </div>
+            </div>
+
+            <p className="text-2xl font-black text-gray-800 mb-6">{formatBR(finalTotal)}</p>
+
+            <div className="w-full space-y-3">
+              <button 
+                onClick={copyToClipboard}
+                className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold transition border border-gray-200"
+              >
+                <Copy className="w-4 h-4" /> Copiar Código Pix
+              </button>
+              
+              <button 
+                onClick={handleConfirmOrder}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-green-600/20 transition transform active:scale-[0.98]"
+              >
+                Já fiz o pagamento!
+              </button>
+            </div>
+            
+            <button onClick={() => setPaymentModalOpen(false)} className="mt-4 text-xs text-gray-400 hover:text-gray-600 underline">
+              Cancelar / Pagar Depois
             </button>
           </div>
         </div>
@@ -528,8 +664,12 @@ export default function App() {
               </div>
             </div>
 
-            <button onClick={handleCheckout} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition shadow-lg shadow-green-600/20 active:scale-[0.99] flex items-center justify-center gap-2">
-              <Truck className="w-6 h-6" /> Confirmar Pedido
+            <button 
+              onClick={handleInitiatePayment} 
+              disabled={isProcessingPayment}
+              className={`w-full text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-[0.99] flex items-center justify-center gap-2 transition ${isProcessingPayment ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-green-600/20'}`}
+            >
+              {isProcessingPayment ? <Loader2 className="w-6 h-6 animate-spin"/> : <><Truck className="w-6 h-6" /> Confirmar e Pagar</>}
             </button>
           </div>
         </div>
@@ -604,6 +744,7 @@ export default function App() {
 
       {/* Modals */}
       <AcaiModal />
+      <PaymentModal />
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-10 text-center">
@@ -612,7 +753,7 @@ export default function App() {
            <span className="font-bold">Doce É Ser</span>
         </div>
         <p className="flex items-center justify-center gap-1 text-gray-400 text-sm">
-          Feito com <Heart className="w-4 h-4 text-red-400 fill-current animate-pulse" /> em Florianópolis
+          Feito por <a href="https://instagram.com/diivulgaja" target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-700 hover:text-amber-900 transition-colors">Divulga Já</a>
         </p>
       </footer>
     </div>
