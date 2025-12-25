@@ -386,9 +386,7 @@ const ProductCard = ({ product, onAdd, onCustomize }) => {
       </footer>
     </div>
   );
-};
 
-/* ------------- Acai Modal Component ------------- */
 const AcaiModal = ({ product, onClose, onAdd }) => {
   const [selected, setSelected] = useState([]);
   const toggle = (name) => setSelected(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]);
