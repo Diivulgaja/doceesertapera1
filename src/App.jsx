@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
   ShoppingCart, Plus, Minus, X, Home, ChevronRight, Truck, MapPin,
-  Loader2, Cake, Heart, Trash2, Check, Clock
+  Loader2, Cake, Heart, Trash2, Check, Clock, Utensils, Star, Phone
 } from "lucide-react";
 
 /* ------------- CONFIGURAÇÕES ------------- */
@@ -125,7 +125,7 @@ export default function App() {
   const [customer, setCustomer] = useState({ nome: '', telefone: '', rua: '', numero: '', bairro: '' });
   const [lastOrderId, setLastOrderId] = useState(null);
 
-  // --- 1. CARREGAR SUPABASE VIA CDN (Fix para o erro de build) ---
+  // --- 1. CARREGAR SUPABASE VIA CDN ---
   useEffect(() => {
     if (window.supabase && window.supabase.createClient) {
       setSupabase(window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY));
@@ -190,24 +190,41 @@ export default function App() {
     }
   };
 
-  // --- COMPONENTES INTERNOS ---
+  // --- COMPONENTES VISUAIS ---
   
   const ProductCard = ({ product }) => (
-    <div className="flex flex-col rounded-xl shadow-sm border border-gray-100 overflow-hidden bg-white">
-      <div className="h-40 overflow-hidden relative">
-        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-        <div className="absolute top-2 right-2 px-2 py-1 rounded bg-white/90 text-xs font-bold shadow-sm uppercase">{categories[product.category] || product.category}</div>
-      </div>
-      <div className="p-4 flex-grow flex flex-col justify-between">
-        <div>
-          <h3 className="text-base font-bold text-gray-800 leading-tight">{product.name}</h3>
-          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{product.description}</p>
+    <div className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
+      <div className="h-48 overflow-hidden relative bg-gray-100">
+        <img 
+          src={product.imageUrl} 
+          alt={product.name} 
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+        />
+        {/* Overlay gradiente */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        
+        {/* Tag Categoria */}
+        <div className="absolute top-3 left-3">
+          <span className="px-3 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[10px] font-extrabold text-amber-800 shadow-sm uppercase tracking-wider border border-white/50">
+            {categories[product.category]}
+          </span>
         </div>
-        <div className="mt-4 flex justify-between items-center">
-          <span className="font-bold text-amber-700 text-lg">{formatBR(product.price)}</span>
+      </div>
+      
+      <div className="p-5 flex flex-col flex-grow">
+        <div className="flex-grow">
+          <h3 className="text-lg font-bold text-gray-800 leading-tight mb-2 group-hover:text-amber-700 transition-colors">{product.name}</h3>
+          <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">{product.description}</p>
+        </div>
+        
+        <div className="mt-5 pt-4 border-t border-dashed border-gray-100 flex justify-between items-center">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">A partir de</span>
+            <span className="font-extrabold text-amber-600 text-xl">{formatBR(product.price)}</span>
+          </div>
           <button 
             onClick={() => product.id === ACAI_ID ? setAcaiModalProduct(product) : addToCart(product)}
-            className="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center hover:bg-amber-700 active:scale-95 transition"
+            className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-lg shadow-amber-600/20 hover:bg-amber-700 hover:scale-105 hover:shadow-amber-600/40 active:scale-95 transition-all duration-300"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -224,36 +241,62 @@ export default function App() {
     const finalPrice = acaiModalProduct.price + extraPrice;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-        <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-          <div className="p-4 border-b flex justify-between items-center bg-amber-50">
-            <h3 className="font-bold text-amber-900">Montar Açaí</h3>
-            <button onClick={() => setAcaiModalProduct(null)} className="p-1 hover:bg-amber-100 rounded-full"><X className="w-5 h-5 text-amber-900"/></button>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fadeIn">
+        <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl scale-100 animate-slideUp">
+          <div className="p-5 border-b flex justify-between items-center bg-gradient-to-r from-purple-700 to-purple-900 text-white">
+            <div className="flex items-center gap-2">
+              <div className="bg-white/20 p-1.5 rounded-lg"><Star className="w-4 h-4 text-yellow-300 fill-current" /></div>
+              <h3 className="font-bold text-lg">Montar Açaí</h3>
+            </div>
+            <button onClick={() => setAcaiModalProduct(null)} className="p-1 hover:bg-white/10 rounded-full transition"><X className="w-5 h-5"/></button>
           </div>
-          <div className="p-4 max-h-[60vh] overflow-y-auto">
-            <p className="text-sm text-gray-500 mb-3">Escolha seus adicionais:</p>
-            <div className="space-y-2">
-              {ACAI_TOPPINGS.map(t => (
-                <div key={t.name} onClick={() => toggle(t.name)} className={`flex justify-between items-center p-3 rounded-lg border cursor-pointer transition ${selected.includes(t.name) ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-amber-300'}`}>
-                  <span className="text-sm font-medium">{t.name}</span>
-                  <span className="text-xs text-gray-500 font-bold">+{formatBR(t.price)}</span>
-                </div>
-              ))}
+          
+          <div className="p-5 max-h-[50vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center justify-between mb-4">
+               <p className="text-sm font-medium text-gray-600">Escolha seus adicionais:</p>
+               <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">{selected.length} selecionados</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {ACAI_TOPPINGS.map(t => {
+                const isSelected = selected.includes(t.name);
+                return (
+                  <div 
+                    key={t.name} 
+                    onClick={() => toggle(t.name)} 
+                    className={`flex justify-between items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-purple-500 bg-purple-50 shadow-sm' : 'border-gray-100 hover:border-purple-200 bg-white'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-purple-600 bg-purple-600' : 'border-gray-300'}`}>
+                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <span className={`text-sm font-medium ${isSelected ? 'text-purple-900' : 'text-gray-700'}`}>{t.name}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 font-bold bg-white px-2 py-1 rounded-md shadow-sm border border-gray-100">+{formatBR(t.price)}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
-            <div>
-              <p className="text-xs text-gray-500">Total</p>
-              <p className="text-lg font-bold text-gray-900">{formatBR(finalPrice)}</p>
+          
+          <div className="p-5 bg-gray-50 border-t border-gray-100">
+            <div className="flex justify-between items-end mb-4">
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Valor Final</p>
+                <p className="text-2xl font-black text-purple-900">{formatBR(finalPrice)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-400">Base: {formatBR(ACAI_BASE_PRICE)}</p>
+                <p className="text-xs text-gray-400">Adicionais: {formatBR(extraPrice)}</p>
+              </div>
             </div>
             <button 
               onClick={() => {
                 addToCart({ ...acaiModalProduct, price: finalPrice, isCustom: true, uniqueId: Math.random().toString(36) }, 1, selected);
                 setAcaiModalProduct(null);
               }}
-              className="bg-amber-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-amber-700 transition"
+              className="w-full bg-purple-700 text-white py-3.5 rounded-xl font-bold hover:bg-purple-800 transition shadow-lg shadow-purple-700/20 active:scale-[0.98]"
             >
-              Adicionar
+              Adicionar ao Carrinho
             </button>
           </div>
         </div>
@@ -264,128 +307,238 @@ export default function App() {
   // --- PÁGINAS ---
   
   const MenuPage = (
-    <div className="pb-24">
-      {/* Categorias */}
-      <div className="flex gap-2 overflow-x-auto p-4 pb-2 sticky top-16 bg-gray-50 z-10 no-scrollbar">
-        {Object.entries(categories).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setCategoryFilter(key)}
-            className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${categoryFilter === key ? 'bg-amber-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'}`}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="pb-32">
+      {/* Hero Section */}
+      <div className="relative mx-4 mt-6 mb-8 rounded-3xl overflow-hidden shadow-2xl shadow-amber-900/10 bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 text-white p-8">
+        <div className="relative z-10 max-w-lg">
+          <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold mb-3 border border-white/20">Doce É Ser</div>
+          <h2 className="text-3xl md:text-4xl font-extrabold mb-3 leading-tight">O doce equilíbrio <br/>que o seu dia precisa. 🍰</h2>
+          <p className="text-amber-100 mb-6 text-sm md:text-base opacity-90 leading-relaxed">Experimente nossos bolos artesanais e açaís montados na hora com ingredientes premium.</p>
+          <div className="flex gap-3">
+            <button onClick={() => setCategoryFilter('all')} className="bg-white text-amber-800 px-6 py-2.5 rounded-full font-bold text-sm shadow-lg hover:bg-gray-50 transition active:scale-95">
+              Ver Tudo
+            </button>
+            <button onClick={() => setCategoryFilter('bolos')} className="bg-amber-800/50 backdrop-blur-sm text-white border border-white/20 px-6 py-2.5 rounded-full font-bold text-sm hover:bg-amber-800/70 transition">
+              Bolos
+            </button>
+          </div>
+        </div>
+        
+        {/* Decorative Elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute bottom-0 right-10 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl"></div>
+        <div className="absolute right-[-20px] bottom-[-40px] opacity-20 rotate-12">
+           <Cake className="w-64 h-64 text-white" />
+        </div>
       </div>
 
-      {/* Lista */}
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {initialProducts
-          .filter(p => categoryFilter === 'all' || p.category === categoryFilter)
-          .map(p => <ProductCard key={p.id} product={p} />)
-        }
+      {/* Categorias Sticky */}
+      <div className="sticky top-[72px] z-30 bg-gray-50/95 backdrop-blur-md py-4 border-b border-gray-200/50 mb-6">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar items-center">
+            {Object.entries(categories).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setCategoryFilter(key)}
+                className={`px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 border ${
+                  categoryFilter === key 
+                  ? 'bg-amber-700 text-white shadow-md shadow-amber-700/20 border-amber-700 transform scale-105' 
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-amber-300 hover:text-amber-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de Produtos */}
+      <div className="max-w-4xl mx-auto px-4">
+        <div className="flex items-center justify-between mb-6">
+           <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+             <Utensils className="w-5 h-5 text-amber-600"/> 
+             {categories[categoryFilter]}
+           </h3>
+           <span className="text-xs font-medium text-gray-400">
+             {initialProducts.filter(p => categoryFilter === 'all' || p.category === categoryFilter).length} itens
+           </span>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {initialProducts
+            .filter(p => categoryFilter === 'all' || p.category === categoryFilter)
+            .map(p => <ProductCard key={p.id} product={p} />)
+          }
+        </div>
       </div>
     </div>
   );
 
   const CartPage = (
-    <div className="p-4 pb-24 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><ShoppingCart /> Seu Carrinho</h2>
+    <div className="p-4 pb-32 max-w-2xl mx-auto">
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+          <ShoppingCart className="w-5 h-5" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-800">Seu Carrinho</h2>
+      </div>
       
       {cart.length === 0 ? (
-        <div className="text-center py-10 text-gray-500">
-          <Cake className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>Seu carrinho está vazio.</p>
-          <button onClick={() => setPage('menu')} className="mt-4 text-amber-600 font-bold hover:underline">Ver Cardápio</button>
+        <div className="bg-white rounded-3xl p-10 text-center shadow-sm border border-gray-100">
+          <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-300">
+            <Cake className="w-10 h-10" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-800 mb-2">Sua sacola está vazia</h3>
+          <p className="text-gray-500 mb-8 max-w-xs mx-auto">Que tal adicionar alguns doces para deixar seu dia mais feliz?</p>
+          <button onClick={() => setPage('menu')} className="bg-amber-600 text-white px-8 py-3 rounded-full font-bold shadow-lg shadow-amber-600/20 hover:bg-amber-700 transition">
+            Ver Cardápio
+          </button>
         </div>
       ) : (
-        <>
-          <div className="space-y-4 mb-6">
+        <div className="space-y-6">
+          {/* Itens */}
+          <div className="space-y-4">
             {cart.map((item, idx) => (
-              <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-start animate-slideUp">
-                <div>
-                  <h4 className="font-bold text-gray-800">{item.name}</h4>
-                  {item.toppings && item.toppings.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">+ {item.toppings.join(', ')}</p>
-                  )}
-                  <p className="text-amber-700 font-bold mt-2">{formatBR(item.price * item.quantity)}</p>
+              <div key={idx} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex gap-4 transition-all hover:shadow-md">
+                <div className="w-20 h-20 bg-gray-100 rounded-xl flex-shrink-0 overflow-hidden">
+                  <img src={item.imageUrl} className="w-full h-full object-cover" alt="" />
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
-                    <button onClick={() => item.quantity > 1 ? addToCart(item, -1) : removeFromCart(item.uniqueId || item.id)} className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-600"><Minus className="w-4 h-4"/></button>
-                    <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
-                    <button onClick={() => addToCart(item, 1)} className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-green-600"><Plus className="w-4 h-4"/></button>
+                <div className="flex-grow flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-bold text-gray-800 leading-tight pr-4">{item.name}</h4>
+                      <button onClick={() => removeFromCart(item.uniqueId || item.id)} className="text-gray-300 hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                    {item.toppings && item.toppings.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-1">+ {item.toppings.join(', ')}</p>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-end mt-2">
+                    <p className="text-amber-700 font-extrabold">{formatBR(item.price * item.quantity)}</p>
+                    <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                      <button onClick={() => item.quantity > 1 ? addToCart(item, -1) : removeFromCart(item.uniqueId || item.id)} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-amber-700 hover:bg-white rounded transition"><Minus className="w-3 h-3"/></button>
+                      <span className="text-sm font-bold w-4 text-center text-gray-700">{item.quantity}</span>
+                      <button onClick={() => addToCart(item, 1)} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-amber-700 hover:bg-white rounded transition"><Plus className="w-3 h-3"/></button>
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
-            <h3 className="font-bold text-lg border-b pb-2">Entrega</h3>
-            <div className="grid gap-3">
-              <input placeholder="Seu Nome" className="p-3 border rounded-lg bg-gray-50" value={customer.nome} onChange={e => setCustomer({...customer, nome: e.target.value})} />
-              <input placeholder="Telefone (WhatsApp)" className="p-3 border rounded-lg bg-gray-50" value={customer.telefone} onChange={e => setCustomer({...customer, telefone: e.target.value})} />
-              <div className="grid grid-cols-3 gap-2">
-                <input placeholder="Rua" className="col-span-2 p-3 border rounded-lg bg-gray-50" value={customer.rua} onChange={e => setCustomer({...customer, rua: e.target.value})} />
-                <input placeholder="Nº" className="p-3 border rounded-lg bg-gray-50" value={customer.numero} onChange={e => setCustomer({...customer, numero: e.target.value})} />
+          {/* Dados e Resumo */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+            <div>
+              <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-amber-600"/> Entrega
+              </h3>
+              <div className="grid gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-400 uppercase">Seu Nome</label>
+                    <input placeholder="Ex: João Silva" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-amber-500 focus:outline-none transition" value={customer.nome} onChange={e => setCustomer({...customer, nome: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-400 uppercase">Telefone</label>
+                    <input placeholder="(99) 99999-9999" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-amber-500 focus:outline-none transition" value={customer.telefone} onChange={e => setCustomer({...customer, telefone: e.target.value})} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase">Rua</label>
+                  <input placeholder="Endereço de entrega" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-amber-500 focus:outline-none transition" value={customer.rua} onChange={e => setCustomer({...customer, rua: e.target.value})} />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-400 uppercase">Número</label>
+                    <input placeholder="123" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-amber-500 focus:outline-none transition" value={customer.numero} onChange={e => setCustomer({...customer, numero: e.target.value})} />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs font-bold text-gray-400 uppercase">Bairro</label>
+                    <input placeholder="Bairro" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-amber-500 focus:outline-none transition" value={customer.bairro} onChange={e => setCustomer({...customer, bairro: e.target.value})} />
+                  </div>
+                </div>
               </div>
-              <input placeholder="Bairro" className="p-3 border rounded-lg bg-gray-50" value={customer.bairro} onChange={e => setCustomer({...customer, bairro: e.target.value})} />
             </div>
             
-            <div className="pt-4 border-t space-y-2">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatBR(cartTotal)}</span></div>
-              <div className="flex justify-between text-gray-600"><span>Taxa de Entrega</span><span>{formatBR(DELIVERY_FEE)}</span></div>
-              <div className="flex justify-between text-xl font-bold text-gray-900 pt-2"><span>Total</span><span>{formatBR(finalTotal)}</span></div>
+            <div className="pt-6 border-t border-dashed border-gray-200">
+              <div className="flex justify-between text-gray-500 mb-2 text-sm"><span>Subtotal</span><span>{formatBR(cartTotal)}</span></div>
+              <div className="flex justify-between text-gray-500 mb-4 text-sm"><span>Taxa de Entrega</span><span>{formatBR(DELIVERY_FEE)}</span></div>
+              <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl">
+                 <span className="font-bold text-gray-700">Total a pagar</span>
+                 <span className="text-2xl font-black text-amber-700">{formatBR(finalTotal)}</span>
+              </div>
             </div>
 
-            <button onClick={handleCheckout} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-              <Truck className="w-5 h-5" /> Enviar Pedido
+            <button onClick={handleCheckout} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition shadow-lg shadow-green-600/20 active:scale-[0.99] flex items-center justify-center gap-2">
+              <Truck className="w-6 h-6" /> Confirmar Pedido
             </button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 
   const TrackingPage = (
-    <div className="p-8 max-w-md mx-auto text-center pt-20">
-      <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600 animate-bounce">
-        <Check className="w-10 h-10" />
+    <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
+      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 animate-bounce shadow-lg shadow-green-100">
+        <Check className="w-12 h-12" />
       </div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Pedido Recebido!</h2>
-      <p className="text-gray-600 mb-6">A cozinha já está preparando suas delícias. Acompanhe o status:</p>
+      <h2 className="text-3xl font-black text-gray-800 mb-2">Pedido Enviado!</h2>
+      <p className="text-gray-500 mb-8 max-w-sm">Seu pedido foi recebido com sucesso e nossa cozinha já vai começar a preparar.</p>
       
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-        <p className="text-sm text-gray-500 uppercase font-bold tracking-wider mb-1">Status Atual</p>
-        <p className="text-xl font-bold text-amber-600">Recebido / Em Análise</p>
-        <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
-          <Clock className="w-4 h-4" /> Previsão: {ETA_TEXT}
+      <div className="bg-white p-8 rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100 w-full max-w-sm relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+        <p className="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Status do Pedido</p>
+        <p className="text-2xl font-bold text-amber-600 mb-6">Em Análise</p>
+        
+        <div className="flex items-center justify-center gap-3 bg-gray-50 py-3 px-4 rounded-xl border border-gray-100">
+          <Clock className="w-5 h-5 text-gray-400" /> 
+          <span className="text-gray-600 font-medium">Previsão: <strong>{ETA_TEXT}</strong></span>
+        </div>
+
+        <div className="mt-6 pt-6 border-t border-dashed border-gray-100">
+           <p className="text-xs text-gray-400 mb-2">Número do Pedido</p>
+           <p className="font-mono text-sm bg-gray-100 py-1 px-3 rounded text-gray-600 select-all">{lastOrderId}</p>
         </div>
       </div>
 
-      <button onClick={() => setPage('menu')} className="text-amber-700 font-bold hover:underline">Voltar ao Menu</button>
+      <button onClick={() => {setPage('menu'); setCart([]);}} className="mt-8 text-amber-700 font-bold hover:bg-amber-50 px-6 py-2 rounded-full transition">
+        Fazer outro pedido
+      </button>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
-      {/* Header */}
-      <header className="sticky top-0 bg-white/80 backdrop-blur-md shadow-sm z-40 px-4 py-3">
+      {/* Header Fixo */}
+      <header className="sticky top-0 bg-white/90 backdrop-blur-lg shadow-sm z-40 px-4 py-3 border-b border-gray-100">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setPage('menu')}>
-            <div className="bg-amber-100 p-2 rounded-lg"><Cake className="w-5 h-5 text-amber-600" /></div>
-            <h1 className="font-bold text-lg tracking-tight text-amber-900">Doce É Ser</h1>
+          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setPage('menu')}>
+            <div className="bg-amber-100 p-2 rounded-xl group-hover:bg-amber-200 transition-colors">
+              <Cake className="w-6 h-6 text-amber-600" />
+            </div>
+            <div>
+              <h1 className="font-extrabold text-lg tracking-tight text-gray-800 leading-none">Doce É Ser</h1>
+              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Confeitaria Artesanal</span>
+            </div>
           </div>
-          <button onClick={() => setPage('cart')} className="relative p-2 hover:bg-gray-100 rounded-full transition">
-            <ShoppingCart className="w-6 h-6 text-gray-700" />
-            {cart.length > 0 && <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center shadow-sm">{cart.reduce((a,b)=>a+b.quantity,0)}</span>}
+          <button 
+            onClick={() => setPage('cart')} 
+            className={`relative p-3 rounded-xl transition-all duration-300 ${cart.length > 0 ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'hover:bg-gray-100 text-gray-600'}`}
+          >
+            <ShoppingCart className="w-5 h-5" />
+            {cart.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md border-2 border-white transform scale-100 animate-bounce">
+                {cart.reduce((a,b)=>a+b.quantity,0)}
+              </span>
+            )}
           </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto min-h-[80vh]">
+      <main className="max-w-4xl mx-auto min-h-[80vh] animate-fadeIn">
         {page === 'menu' && MenuPage}
         {page === 'cart' && CartPage}
         {page === 'tracking' && TrackingPage}
@@ -395,8 +548,14 @@ export default function App() {
       <AcaiModal />
 
       {/* Footer */}
-      <footer className="bg-white border-t py-8 text-center text-gray-400 text-sm mt-auto">
-        <p className="flex items-center justify-center gap-1">Feito com <Heart className="w-3 h-3 text-red-400 fill-current" /> por Doce É Ser</p>
+      <footer className="bg-white border-t border-gray-100 py-10 text-center">
+        <div className="flex items-center justify-center gap-2 mb-2 opacity-50">
+           <Cake className="w-5 h-5"/>
+           <span className="font-bold">Doce É Ser</span>
+        </div>
+        <p className="flex items-center justify-center gap-1 text-gray-400 text-sm">
+          Feito com <Heart className="w-4 h-4 text-red-400 fill-current animate-pulse" /> em Florianópolis
+        </p>
       </footer>
     </div>
   );
