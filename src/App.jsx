@@ -34,7 +34,7 @@ const initialProducts = [
     name: "Red velvet com Ninho e Morangos",
     price: 15.90,
     category: 'bolos',
-    description: "Massa aveludada e macia, coberta com creme de leite Ninho cremoso e morangos fresquinhos.",
+    description: "Massa aveludada e macia, coberta com creme de leite Ninho cremoso e morangos fresquinhos no topo. Uma combinação elegante.",
     imageUrl: "https://i.imgur.com/3UDWhLR.png"
   },
   {
@@ -42,7 +42,7 @@ const initialProducts = [
     name: "Bolo Cenoura com chocolate",
     price: 15.90,
     category: 'bolos',
-    description: "Mini vulcão de cenoura: uma massa fofinha e úmida de bolo de cenoura com chocolate.",
+    description: "Mini vulcão de cenoura: uma massa fofinha e úmida de bolo de cenoura, recheada com explosão de calda cremosa de chocolate.",
     imageUrl: "https://i.imgur.com/aaUdL2b.png"
   },
   {
@@ -69,6 +69,7 @@ const initialProducts = [
     description: "Bolo de chocolate com amendoim, Nutella e chocolate 50%.",
     imageUrl: "https://i.imgur.com/OamNqov.png"
   },
+  // Categoria COPO DA FELICIDADE
   {
     id: 17,
     name: "Copo Oreo com Nutella",
@@ -78,12 +79,69 @@ const initialProducts = [
     imageUrl: "https://i.imgur.com/1EZRMVl.png"
   },
   {
+    id: 24,
+    name: "Copo Maracujá com Brownie",
+    price: 24.90,
+    category: 'copo_felicidade',
+    description: "Creme de maracujá, chocolate 50% e pedaços de brownie.",
+    imageUrl: "https://i.imgur.com/PypEwAz.png"
+  },
+  {
+    id: 25,
+    name: "Copo Brownie Dois Amores",
+    price: 22.90,
+    category: 'copo_felicidade',
+    description: "Dois amores + brownie macio em camadas.",
+    imageUrl: "https://i.imgur.com/mMQtXDB.png"
+  },
+  {
+    id: 26,
+    name: "Copo Encanto de Ninho e Morangos",
+    price: 22.90,
+    category: 'copo_felicidade',
+    description: "Camadas de creme de Ninho e morangos frescos.",
+    imageUrl: "https://i.imgur.com/EgFhhwL.png"
+  },
+  {
+    id: 27,
+    name: "Copo de Brownie com Ferreiro e Nutella",
+    price: 26.90,
+    category: 'copo_felicidade',
+    description: "Brownie, Ferrero, chocolate 50% e Nutella.",
+    imageUrl: "https://i.imgur.com/t6xeVDf.png"
+  },
+  // Categoria BROWNIES
+  {
     id: 20,
     name: "Brownie De Ninho e Nutella",
     price: 11.90,
     category: 'brownie',
     description: "Brownie com creme de Ninho e Nutella.",
     imageUrl: "https://i.imgur.com/vWdYZ8K.png"
+  },
+  {
+    id: 21,
+    name: "Brownie Recheado com Nutella e Morangos",
+    price: 22.90,
+    category: 'brownie',
+    description: "Brownie recheado com creme de Ninho, Nutella e morangos.",
+    imageUrl: "https://i.imgur.com/P1pprjF.png"
+  },
+  {
+    id: 22,
+    name: "Brownie Ferreiro com Nutella",
+    price: 11.90,
+    category: 'brownie',
+    description: "Brownie com Nutella e amendoim torrado.",
+    imageUrl: "https://i.imgur.com/rmp3LtH.png"
+  },
+  {
+    id: 23,
+    name: "Brownie Duo com Oreo",
+    price: 11.90,
+    category: 'brownie',
+    description: "Brownie com cobertura de chocolate e pedaços de Oreo.",
+    imageUrl: "https://i.imgur.com/8IbcWWj.png"
   },
   {
     id: ACAI_ID,
