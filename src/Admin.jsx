@@ -1,7 +1,7 @@
 // src/Admin.jsx
 import React, { useEffect, useState, useMemo } from 'react';
 
-// Mantemos lucide-react e recharts pois elas já existem no seu ambiente
+// Bibliotecas visuais (lucide-react e recharts devem estar instaladas no projeto)
 import { 
   Trash2, Clock, Check, Loader2, 
   ShoppingBag, DollarSign, Users, 
@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 
 // --- CONFIGURAÇÃO ---
+// Substitua pelas suas credenciais reais do Supabase
 const SUPABASE_URL = 'https://sua-url-do-projeto.supabase.co';
 const SUPABASE_ANON_KEY = 'sua-chave-anonima-aqui';
 
