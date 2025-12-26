@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   ShoppingCart, Plus, Minus, X, Home, ChevronRight, Truck, MapPin,
   Loader2, Cake, Heart, Trash2, Check, Clock, Utensils, Star, Phone,
-  QrCode, Copy, CreditCard
+  QrCode, Copy, CreditCard, Bike, Package
 } from "lucide-react";
 
 /* ------------- CONFIGURAÇÕES ------------- */
@@ -174,6 +174,41 @@ const categories = {
   salgado: 'Salgados',
 };
 
+const STATUS_UI = {
+  novo: { 
+    label: "Recebido", 
+    message: "Aguardando o restaurante confirmar.", 
+    icon: Check, 
+    color: "text-blue-600", 
+    bg: "bg-blue-100",
+    bar: "w-[10%]"
+  },
+  preparando: { 
+    label: "Em Preparo", 
+    message: "A cozinha já está preparando suas delícias!", 
+    icon: Utensils, 
+    color: "text-amber-600", 
+    bg: "bg-amber-100",
+    bar: "w-[50%]"
+  },
+  pronto: { 
+    label: "Saiu para Entrega", 
+    message: "Seu pedido está a caminho da sua casa.", 
+    icon: Bike, 
+    color: "text-indigo-600", 
+    bg: "bg-indigo-100",
+    bar: "w-[80%]"
+  },
+  entregue: { 
+    label: "Entregue", 
+    message: "Pedido entregue. Bom apetite!", 
+    icon: Star, 
+    color: "text-green-600", 
+    bg: "bg-green-100",
+    bar: "w-full"
+  }
+};
+
 const formatBR = (value) => `R$ ${Number(value || 0).toFixed(2).replace('.', ',')}`;
 
 export default function App() {
@@ -191,6 +226,7 @@ export default function App() {
   // Dados do pedido
   const [customer, setCustomer] = useState({ nome: '', telefone: '', rua: '', numero: '', bairro: '' });
   const [lastOrderId, setLastOrderId] = useState(null);
+  const [orderStatus, setOrderStatus] = useState('novo');
 
   // --- 1. CARREGAR SUPABASE VIA CDN ---
   useEffect(() => {
@@ -230,9 +266,7 @@ export default function App() {
 
   // --- INTEGRAÇÃO ABACATE PAY ---
   const createAbacateCharge = async () => {
-    // Simulação caso não tenha chave configurada
     if (ABACATE_API_KEY.includes("sk_test")) {
-       // Gera dados fake para visualização do layout
        return {
          pix: {
            qrcode: "00020126580014BR.GOV.BCB.PIX0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913DOCE E SER6008BRASILIA62070503***630465F3",
@@ -261,8 +295,7 @@ export default function App() {
           completionUrl: window.location.href,
           customer: {
             name: customer.nome,
-            phone: customer.telefone,
-            // email: "cliente@exemplo.com" // Ideal pedir email também
+            phone: customer.telefone
           }
         })
       });
@@ -270,7 +303,7 @@ export default function App() {
       return data.data?.billing;
     } catch (error) {
       console.error("Erro AbacatePay:", error);
-      alert("Erro ao gerar Pix. Verifique o console ou a chave API.");
+      alert("Erro ao gerar Pix.");
       return null;
     }
   };
@@ -280,20 +313,14 @@ export default function App() {
     if (!customer.nome || !customer.telefone || !customer.rua) {
       return alert("Por favor, preencha seus dados de entrega.");
     }
-    
     setIsProcessingPayment(true);
-
-    // 1. Gera o Pix na AbacatePay
     const billing = await createAbacateCharge();
-    
     setIsProcessingPayment(false);
 
     if (billing && billing.pix) {
       setPaymentData(billing);
       setPaymentModalOpen(true);
     } else {
-      // Fallback: se falhar API (ou CORS), permite seguir manual? 
-      // Aqui vamos forçar o usuário a tentar de novo ou avisar.
       alert("Não foi possível gerar o Pix automático. Tente novamente.");
     }
   };
@@ -310,7 +337,7 @@ export default function App() {
       items: cart,
       customer: customer,
       paymentMethod: 'PIX',
-      paymentStatus: 'Aguardando Confirmação' // Pode atualizar via webhook depois
+      paymentStatus: 'Aguardando Confirmação'
     };
 
     const { error } = await supabase.from(COLLECTION_ORDERS).insert(payload);
@@ -320,6 +347,7 @@ export default function App() {
       alert("Erro ao enviar pedido.");
     } else {
       setLastOrderId(orderId);
+      setOrderStatus('novo');
       setCart([]);
       setPaymentModalOpen(false);
       setPaymentData(null);
@@ -457,16 +485,12 @@ export default function App() {
           </div>
 
           <div className="p-8 flex flex-col items-center">
-            {/* QR Code Placeholder (se a API retornar URL, use img src) */}
             <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center mb-6 border-2 border-dashed border-gray-300 overflow-hidden relative group">
-               {/* Simulação de QR Code para Layout */}
                <QrCode className="w-24 h-24 text-gray-300 absolute" />
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white opacity-0 group-hover:opacity-10 text-xs font-bold text-gray-500">
                   QR Code AbacatePay
                </div>
-               {/* Se fosse imagem real: <img src={paymentData.pix.qrcode_image_url} ... /> */}
                <div className="z-10 bg-white p-2 rounded-lg shadow-sm">
-                  {/* Como AbacatePay retorna string do QR, normalmente usa-se uma lib para gerar o canvas do QR. Aqui deixamos ilustrativo. */}
                   <QrCode className="w-32 h-32 text-gray-800" />
                </div>
             </div>
@@ -677,35 +701,73 @@ export default function App() {
     </div>
   );
 
-  const TrackingPage = (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
-      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 animate-bounce shadow-lg shadow-green-100">
-        <Check className="w-12 h-12" />
-      </div>
-      <h2 className="text-3xl font-black text-gray-800 mb-2">Pedido Enviado!</h2>
-      <p className="text-gray-500 mb-8 max-w-sm">Seu pedido foi recebido com sucesso e nossa cozinha já vai começar a preparar.</p>
-      
-      <div className="bg-white p-8 rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100 w-full max-w-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
-        <p className="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Status do Pedido</p>
-        <p className="text-2xl font-bold text-amber-600 mb-6">Em Análise</p>
+  const TrackingPage = () => {
+    // Escuta em tempo real o status do pedido
+    useEffect(() => {
+      if (!supabase || !lastOrderId) return;
+
+      const channel = supabase.channel('tracking-order')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: COLLECTION_ORDERS, filter: `id=eq.${lastOrderId}` },
+          (payload) => {
+            if (payload.new && payload.new.status) {
+              setOrderStatus(payload.new.status);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }, [supabase, lastOrderId]);
+
+    const ui = STATUS_UI[orderStatus] || STATUS_UI.novo;
+    const StatusIcon = ui.icon;
+
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+        <div className={`w-28 h-28 ${ui.bg} rounded-full flex items-center justify-center mb-6 shadow-xl transition-all duration-500 animate-bounce-slow`}>
+          <StatusIcon className={`w-14 h-14 ${ui.color}`} />
+        </div>
         
-        <div className="flex items-center justify-center gap-3 bg-gray-50 py-3 px-4 rounded-xl border border-gray-100">
-          <Clock className="w-5 h-5 text-gray-400" /> 
-          <span className="text-gray-600 font-medium">Previsão: <strong>{ETA_TEXT}</strong></span>
+        <h2 className={`text-3xl font-black text-gray-800 mb-2 transition-all`}>{ui.label}</h2>
+        <p className="text-gray-500 mb-8 max-w-sm text-lg leading-relaxed">{ui.message}</p>
+        
+        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100 w-full max-w-sm relative overflow-hidden transition-all duration-300 hover:shadow-2xl">
+          {/* Progress Bar */}
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gray-100">
+            <div className={`h-full ${ui.color.replace('text-', 'bg-')} transition-all duration-1000 ${ui.bar}`}></div>
+          </div>
+
+          <div className="flex justify-between items-center mb-6 mt-2">
+             <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">Status do Pedido</p>
+             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ui.bg} ${ui.color}`}>{orderStatus}</span>
+          </div>
+          
+          <div className="flex items-center justify-center gap-3 bg-gray-50 py-4 px-4 rounded-2xl border border-gray-100 mb-6">
+            <Clock className="w-5 h-5 text-gray-400" /> 
+            <span className="text-gray-600 font-medium">Previsão: <strong className="text-gray-800">{ETA_TEXT}</strong></span>
+          </div>
+
+          <div className="pt-6 border-t border-dashed border-gray-200 text-left">
+             <div className="flex justify-between items-center">
+               <div>
+                 <p className="text-xs text-gray-400 mb-1 font-bold uppercase">Nº do Pedido</p>
+                 <p className="font-mono text-sm font-bold text-gray-600">{lastOrderId ? lastOrderId.slice(-6).toUpperCase() : '---'}</p>
+               </div>
+               <Package className="w-8 h-8 text-gray-200" />
+             </div>
+          </div>
         </div>
 
-        <div className="mt-6 pt-6 border-t border-dashed border-gray-100">
-           <p className="text-xs text-gray-400 mb-2">Número do Pedido</p>
-           <p className="font-mono text-sm bg-gray-100 py-1 px-3 rounded text-gray-600 select-all">{lastOrderId}</p>
-        </div>
+        <button onClick={() => {setPage('menu'); setCart([]);}} className="mt-10 text-amber-700 font-bold hover:bg-amber-50 px-8 py-3 rounded-full transition border border-transparent hover:border-amber-100">
+          Fazer outro pedido
+        </button>
       </div>
-
-      <button onClick={() => {setPage('menu'); setCart([]);}} className="mt-8 text-amber-700 font-bold hover:bg-amber-50 px-6 py-2 rounded-full transition">
-        Fazer outro pedido
-      </button>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
@@ -739,7 +801,7 @@ export default function App() {
       <main className="max-w-4xl mx-auto min-h-[80vh] animate-fadeIn">
         {page === 'menu' && MenuPage}
         {page === 'cart' && CartPage}
-        {page === 'tracking' && TrackingPage}
+        {page === 'tracking' && <TrackingPage />}
       </main>
 
       {/* Modals */}
