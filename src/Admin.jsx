@@ -4,29 +4,48 @@ import {
   Trash2, Clock, Check, Loader2, LayoutDashboard, 
   ShoppingBag, LogOut, Bell, BellOff, MessageCircle, 
   MapPin, Phone, User, DollarSign, TrendingUp, Calendar, 
-  Menu, X, Search, ChevronRight 
+  Menu, X, Search, ChevronRight, Zap 
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   LineChart, Line, CartesianGrid, Legend, AreaChart, Area 
 } from 'recharts';
 
-// REMOVIDO: import { createClient } from ... (Causava o erro)
+// Chaves fornecidas pelo usuário
+const supabaseUrl = 'https://elpinlotdogazhpdwlqr.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVscGlubG90ZG9nYXpocGR3bHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzMjU3MjEsImV4cCI6MjA4MDkwMTcyMX0.alb18e60SkJGV1EBcjJb8CSmj7rshm76qcxRog_B2uY';
 
 /* --- CONFIGURAÇÕES --- */
 const ADMIN_PASSWORD = '071224';
 const TABLE = 'doceeser_pedidos';
 const MOTOBOY_NUMBER = '5548991692018'; 
 
-// Chaves do Supabase (Mantidas)
-const SUPABASE_URL = 'https://elpinlotdogazhpdwlqr.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVscGlubG90ZG9nYXpocGR3bHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzMjU3MjEsImV4cCI6MjA4MDkwMTcyMX0.alb18e60SkJGV1EBcjJb8CSmj7rshm76qcxRog_B2uY';
-
+// Configuração visual dos status
 const STATUS_CONFIG = {
-  novo: { label: 'Novo', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Bell },
-  preparando: { label: 'Preparando', color: 'bg-amber-100 text-amber-800 border-amber-200', icon: Clock },
-  pronto: { label: 'Pronto', color: 'bg-green-100 text-green-800 border-green-200', icon: Check },
-  entregue: { label: 'Entregue', color: 'bg-gray-100 text-gray-600 border-gray-200', icon:  User }
+  novo: { 
+    label: 'Novo Pedido', 
+    color: 'bg-blue-500 text-white shadow-blue-200', 
+    border: 'border-blue-200 bg-blue-50',
+    icon: Bell 
+  },
+  preparando: { 
+    label: 'Em Preparo', 
+    color: 'bg-amber-500 text-white shadow-amber-200', 
+    border: 'border-amber-200 bg-amber-50',
+    icon: Clock 
+  },
+  pronto: { 
+    label: 'Pronto p/ Entrega', 
+    color: 'bg-green-500 text-white shadow-green-200', 
+    border: 'border-green-200 bg-green-50',
+    icon: Check 
+  },
+  entregue: { 
+    label: 'Entregue', 
+    color: 'bg-gray-500 text-white shadow-gray-200', 
+    border: 'border-gray-200 bg-gray-50',
+    icon: User 
+  }
 };
 
 /* --- UTILITÁRIOS --- */
@@ -38,9 +57,7 @@ const formatDate = (dateStr) => {
 };
 
 export default function Admin() {
-  // Estado para o cliente Supabase
   const [supabase, setSupabase] = useState(null);
-  
   const [isAuth, setIsAuth] = useState(() => !!localStorage.getItem('doceeser_admin'));
   const [passwordInput, setPasswordInput] = useState('');
   const [orders, setOrders] = useState([]);
@@ -53,27 +70,24 @@ export default function Admin() {
   const [stats, setStats] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // 1. EFEITO: Carregar Script do Supabase (CDN)
+  // 1. CARREGAR SUPABASE VIA SCRIPT TAG
   useEffect(() => {
-    // Se já existe no window, inicializa
     if (window.supabase && window.supabase.createClient) {
-      setSupabase(window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY));
-      return;
+      setSupabase(window.supabase.createClient(supabaseUrl, supabaseKey));
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      script.async = true;
+      script.onload = () => {
+        if (window.supabase) {
+          setSupabase(window.supabase.createClient(supabaseUrl, supabaseKey));
+        }
+      };
+      document.body.appendChild(script);
     }
-
-    // Se não, injeta o script
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-    script.async = true;
-    script.onload = () => {
-      if (window.supabase) {
-        setSupabase(window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY));
-      }
-    };
-    document.body.appendChild(script);
   }, []);
 
-  // Solicitar permissão de notificação
+  // Permissão de notificação
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
@@ -91,28 +105,31 @@ export default function Admin() {
     }
   };
 
-  // WhatsApp
+  // WhatsApp helper CORRIGIDO
   const formatWhatsappMessage = (order) => {
     const customer = order.customer || {};
     const fullAddress = `${customer.rua || ''}, ${customer.numero || ''} - ${customer.bairro || ''}`.trim();
-    const mapsLink = encodeURIComponent(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`);
+    // Link do mapa apenas encode o endereço, não o link todo
+    const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
     
     const itemsList = Array.isArray(order.items)
-      ? order.items.map(it => `• ${it.quantity || 1}x ${it.name}${it.toppings?.length ? ` (+${it.toppings.join(', ')})` : ''}`).join('%0A')
+      ? order.items.map(it => `• ${it.quantity || 1}x ${it.name}${it.toppings?.length ? ` (+${it.toppings.join(', ')})` : ''}`).join('\n')
       : '';
 
-    return `🚚 *NOVO PEDIDO #${order.id.slice(0, 8)}*%0A%0A` +
-           `👤 *Cliente:* ${customer.nome || '-'}%0A` +
-           `📞 *Tel:* ${customer.telefone || '-'}%0A` +
-           `📍 *Endereço:* ${fullAddress}%0A` +
-           `🗺 *Mapa:* ${mapsLink}%0A%0A` +
-           `🛒 *Itens:*%0A${itemsList}%0A%0A` +
+    // Usando \n para quebra de linha em vez de %0A para ser codificado corretamente depois
+    return `🚚 *NOVO PEDIDO #${order.id.slice(0, 8).toUpperCase()}*\n\n` +
+           `👤 *Cliente:* ${customer.nome || '-'}\n` +
+           `📞 *Tel:* ${customer.telefone || '-'}\n` +
+           `📍 *Endereço:* ${fullAddress}\n` +
+           `🗺 *Mapa:* ${mapsLink}\n\n` +
+           `🛒 *Itens:*\n${itemsList}\n\n` +
            `💰 *Total:* ${formatCurrency(order.total)}`;
   };
 
   const sendWhatsapp = (order) => {
     const text = formatWhatsappMessage(order);
-    window.open(`https://wa.me/${MOTOBOY_NUMBER}?text=${text}`, '_blank');
+    // Codifica TUDO (incluindo o # e quebras de linha) para a URL
+    window.open(`https://wa.me/${MOTOBOY_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   // Estatísticas
@@ -130,7 +147,12 @@ export default function Admin() {
       // Por Status
       const statusMap = {};
       list.forEach(o => { statusMap[o.status] = (statusMap[o.status] || 0) + 1; });
-      const statusSeries = Object.keys(statusMap).map(k => ({ status: k, count: statusMap[k], name: STATUS_CONFIG[k]?.label || k }));
+      const statusSeries = Object.keys(statusMap).map(k => ({ 
+        status: k, 
+        count: statusMap[k], 
+        name: STATUS_CONFIG[k]?.label || k,
+        fill: k === 'novo' ? '#3b82f6' : k === 'preparando' ? '#f59e0b' : k === 'pronto' ? '#22c55e' : '#9ca3af'
+      }));
 
       // Vendas 7 dias
       const days = [];
@@ -154,9 +176,15 @@ export default function Admin() {
 
   // Fetch e Realtime
   const fetchOrders = async () => {
-    if (!supabase) return; // Guard clause
+    if (!supabase) return;
     setLoading(true);
-    const { data, error } = await supabase.from(TABLE).select('*').order('createdAt', { ascending: false });
+    // Filtra para não mostrar contas de usuário
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('*')
+      .neq('status', 'user_account') 
+      .order('createdAt', { ascending: false });
+      
     if (!error) {
       setOrders(data || []);
       computeStats(data || []);
@@ -164,16 +192,15 @@ export default function Admin() {
     setLoading(false);
   };
 
-  // 2. EFEITO: Monitorar pedidos (Só roda quando 'supabase' estiver pronto e auth ok)
   useEffect(() => {
     if (!isAuth || !supabase) return;
-
+    
     fetchOrders();
 
     const channel = supabase.channel('admin-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: TABLE }, payload => {
         const newOrder = payload.new;
-        if (newOrder) {
+        if (newOrder && newOrder.status !== 'user_account') {
           if (soundEnabled) playSound();
           setShowNewOrderBanner(true);
           setTimeout(() => setShowNewOrderBanner(false), 8000);
@@ -187,8 +214,10 @@ export default function Admin() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: TABLE }, () => fetchOrders())
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
-  }, [isAuth, supabase, soundEnabled, autoSendWhatsapp]);
+    return () => {
+      try { supabase.removeChannel(channel); } catch(e) {}
+    };
+  }, [isAuth, soundEnabled, autoSendWhatsapp, supabase]);
 
   // Ações
   const handleLogin = (e) => {
@@ -202,7 +231,6 @@ export default function Admin() {
   const updateStatus = async (id, status) => {
     if (!supabase) return;
     await supabase.from(TABLE).update({ status }).eq('id', id);
-    // Optimistic update
     const updated = orders.map(o => o.id === id ? { ...o, status } : o);
     setOrders(updated);
     computeStats(updated);
@@ -214,14 +242,12 @@ export default function Admin() {
     return orders.filter(o => o.status === filter);
   }, [orders, filter]);
 
-  // --- TELA DE CARREGAMENTO INICIAL (Se supabase ainda não carregou) ---
-  if (isAuth && !supabase) {
+  // --- LOADING INICIAL ---
+  if (!supabase) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-amber-600" />
-          <p className="text-gray-500">Conectando ao sistema...</p>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100">
+        <Loader2 className="w-12 h-12 animate-spin text-amber-600 mb-4" />
+        <p className="text-amber-800 font-bold text-lg">Carregando Sistema Doce...</p>
       </div>
     );
   }
@@ -229,26 +255,26 @@ export default function Admin() {
   // --- TELA DE LOGIN ---
   if (!isAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100 p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-amber-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 p-4">
+        <div className="bg-white/95 backdrop-blur-sm p-10 rounded-3xl shadow-2xl w-full max-w-md border-4 border-white/20">
           <div className="text-center mb-8">
-            <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="w-8 h-8 text-amber-600" />
+            <div className="bg-amber-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <User className="w-10 h-10 text-amber-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-800">Área Administrativa</h1>
-            <p className="text-gray-500">Doce É Ser</p>
+            <h1 className="text-3xl font-black text-gray-800 tracking-tight">Doce É Ser</h1>
+            <p className="text-gray-500 font-medium mt-2">Acesso Administrativo</p>
           </div>
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} className="space-y-4">
             <input 
               type="password" 
               autoFocus
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none mb-4 transition"
-              placeholder="Digite a senha de acesso"
+              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-amber-200 focus:border-amber-500 outline-none transition text-lg bg-gray-50"
+              placeholder="Senha de acesso"
               value={passwordInput}
               onChange={e => setPasswordInput(e.target.value)}
             />
-            <button className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition shadow-md hover:shadow-lg">
-              Entrar no Painel
+            <button className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-amber-600/30 active:scale-[0.98] text-lg">
+              Entrar
             </button>
           </form>
         </div>
@@ -261,64 +287,77 @@ export default function Admin() {
     <div className="flex h-screen bg-gray-50 font-sans text-gray-800 overflow-hidden">
       
       {/* SIDEBAR (Desktop) */}
-      <aside className="hidden md:flex w-64 flex-col bg-white border-r border-gray-200 shadow-sm z-10">
-        <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-          <div className="w-8 h-8 bg-amber-600 rounded-lg flex items-center justify-center text-white font-bold">D</div>
-          <span className="font-bold text-xl text-gray-800">Doce É Ser</span>
+      <aside className="hidden md:flex w-72 flex-col bg-white border-r border-gray-100 shadow-xl z-20">
+        <div className="p-8 border-b border-gray-50 bg-gradient-to-br from-amber-600 to-orange-600">
+          <div className="flex items-center gap-3 text-white">
+            <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
+              <LayoutDashboard className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="font-black text-xl leading-none">Doce É Ser</h1>
+              <span className="text-[10px] font-medium opacity-80 uppercase tracking-widest">Admin Pro</span>
+            </div>
+          </div>
         </div>
         
-        <nav className="flex-1 p-4 space-y-1">
-          <SidebarItem icon={LayoutDashboard} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
+        <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-4 mb-2">Menu Principal</p>
+          <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
           <SidebarItem icon={ShoppingBag} label="Pedidos" active={view === 'orders'} onClick={() => setView('orders')} badge={orders.filter(o => o.status === 'novo').length} />
         </nav>
 
-        <div className="p-4 border-t border-gray-100">
-          <div className="bg-amber-50 rounded-xl p-4 mb-4">
-            <p className="text-xs text-amber-800 font-semibold mb-2">Configurações Rápidas</p>
-            <div className="space-y-2">
-              <button onClick={() => setSoundEnabled(!soundEnabled)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-amber-700 w-full">
-                {soundEnabled ? <Bell className="w-4 h-4 text-green-600" /> : <BellOff className="w-4 h-4 text-gray-400" />}
-                {soundEnabled ? 'Som Ativo' : 'Som Mudo'}
-              </button>
-              <button onClick={() => setAutoSendWhatsapp(!autoSendWhatsapp)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-amber-700 w-full">
-                <MessageCircle className={`w-4 h-4 ${autoSendWhatsapp ? 'text-green-600' : 'text-gray-400'}`} />
-                Auto WhatsApp
-              </button>
-            </div>
+        <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 mb-4">Ações Rápidas</p>
+          <div className="space-y-3">
+            <ToggleButton 
+              active={soundEnabled} 
+              onClick={() => setSoundEnabled(!soundEnabled)} 
+              iconOn={Bell} iconOff={BellOff} 
+              label="Alerta Sonoro" 
+            />
+            <ToggleButton 
+              active={autoSendWhatsapp} 
+              onClick={() => setAutoSendWhatsapp(!autoSendWhatsapp)} 
+              iconOn={MessageCircle} iconOff={MessageCircle} 
+              label="Auto WhatsApp" 
+            />
+            <button onClick={() => { localStorage.removeItem('doceeser_admin'); setIsAuth(false); }} className="flex items-center gap-3 text-red-600 hover:bg-red-50 p-3 rounded-xl w-full transition font-bold text-sm">
+              <LogOut className="w-5 h-5" /> Sair do Painel
+            </button>
           </div>
-          <button onClick={() => { localStorage.removeItem('doceeser_admin'); setIsAuth(false); }} className="flex items-center gap-2 text-red-600 hover:bg-red-50 p-2 rounded w-full transition">
-            <LogOut className="w-4 h-4" /> Sair
-          </button>
         </div>
       </aside>
 
       {/* MOBILE HEADER */}
-      <div className="md:hidden fixed top-0 w-full bg-white z-20 shadow-sm px-4 py-3 flex justify-between items-center">
-        <div className="font-bold text-lg text-amber-700">Admin Doce</div>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2">
+      <div className="md:hidden fixed top-0 w-full bg-amber-600 text-white z-30 shadow-lg px-4 py-3 flex justify-between items-center">
+        <div className="font-bold text-lg flex items-center gap-2"><LayoutDashboard className="w-5 h-5"/> Admin Doce</div>
+        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 bg-white/20 rounded-lg">
           {mobileMenuOpen ? <X /> : <Menu />}
         </button>
       </div>
 
       {/* MOBILE MENU OVERLAY */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 bg-white z-10 pt-16 px-6 md:hidden flex flex-col gap-4">
-          <button onClick={() => { setView('orders'); setMobileMenuOpen(false); }} className="p-3 bg-amber-50 rounded-lg text-amber-800 font-bold text-left">Pedidos</button>
-          <button onClick={() => { setView('dashboard'); setMobileMenuOpen(false); }} className="p-3 bg-gray-50 rounded-lg text-gray-700 font-bold text-left">Dashboard</button>
-          <div className="h-px bg-gray-200 my-2"></div>
-          <button onClick={() => setSoundEnabled(!soundEnabled)} className="flex items-center gap-2 text-gray-600">{soundEnabled ? <Bell className="w-5 h-5 text-green-500"/> : <BellOff className="w-5 h-5"/>} Som de Alerta</button>
-          <button onClick={() => setAutoSendWhatsapp(!autoSendWhatsapp)} className="flex items-center gap-2 text-gray-600"><MessageCircle className={`w-5 h-5 ${autoSendWhatsapp ? 'text-green-500' : 'text-gray-400'}`}/> Auto WhatsApp</button>
+        <div className="fixed inset-0 bg-white z-20 pt-20 px-6 md:hidden flex flex-col gap-4 animate-fadeIn">
+          <button onClick={() => { setView('orders'); setMobileMenuOpen(false); }} className="p-4 bg-amber-50 rounded-xl text-amber-800 font-bold text-left flex items-center gap-3"><ShoppingBag/> Pedidos</button>
+          <button onClick={() => { setView('dashboard'); setMobileMenuOpen(false); }} className="p-4 bg-gray-50 rounded-xl text-gray-700 font-bold text-left flex items-center gap-3"><LayoutDashboard/> Dashboard</button>
+          <div className="h-px bg-gray-100 my-2"></div>
+          <ToggleButton active={soundEnabled} onClick={() => setSoundEnabled(!soundEnabled)} iconOn={Bell} iconOff={BellOff} label="Alerta Sonoro" />
+          <ToggleButton active={autoSendWhatsapp} onClick={() => setAutoSendWhatsapp(!autoSendWhatsapp)} iconOn={MessageCircle} iconOff={MessageCircle} label="Auto WhatsApp" />
         </div>
       )}
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 overflow-y-auto bg-gray-50/50 relative pt-16 md:pt-0">
+      <main className="flex-1 overflow-y-auto bg-gray-50 relative pt-16 md:pt-0">
         
         {/* Banner de Novo Pedido */}
         {showNewOrderBanner && (
-          <div className="sticky top-0 z-50 bg-blue-600 text-white px-6 py-3 shadow-lg flex justify-between items-center animate-pulse cursor-pointer" onClick={() => setView('orders')}>
-            <div className="flex items-center gap-2 font-bold"><Bell className="w-5 h-5" /> Novo pedido recebido!</div>
-            <button onClick={(e) => {e.stopPropagation(); setShowNewOrderBanner(false)}}><X className="w-4 h-4" /></button>
+          <div 
+            onClick={() => setView('orders')}
+            className="sticky top-4 mx-4 md:mx-8 z-40 bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 rounded-2xl shadow-xl shadow-blue-500/30 flex justify-between items-center animate-bounce-slow cursor-pointer border border-blue-400/50"
+          >
+            <div className="flex items-center gap-3 font-bold text-lg"><Bell className="w-6 h-6 animate-swing" /> Novo pedido recebido!</div>
+            <button onClick={(e) => {e.stopPropagation(); setShowNewOrderBanner(false)}} className="bg-white/20 p-1 rounded-full hover:bg-white/30"><X className="w-5 h-5" /></button>
           </div>
         )}
 
@@ -326,94 +365,109 @@ export default function Admin() {
           
           {/* VIEW: DASHBOARD */}
           {view === 'dashboard' && (
-            <div className="space-y-6 animate-fadeIn">
-              <h2 className="text-2xl font-bold text-gray-800">Visão Geral da Loja</h2>
+            <div className="space-y-8 animate-fadeIn">
+              <div>
+                <h2 className="text-3xl font-black text-gray-800 mb-2">Visão Geral</h2>
+                <p className="text-gray-500">Métricas de hoje e desempenho da loja.</p>
+              </div>
               
               {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard title="Vendas Hoje" value={formatCurrency(stats.totalToday)} icon={DollarSign} color="text-green-600" bg="bg-green-50" />
-                <StatCard title="Pedidos Hoje" value={stats.countToday || 0} icon={ShoppingBag} color="text-blue-600" bg="bg-blue-50" />
-                <StatCard title="Ticket Médio" value={formatCurrency(stats.ticketAvg)} icon={TrendingUp} color="text-purple-600" bg="bg-purple-50" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard 
+                  title="Vendas Hoje" 
+                  value={formatCurrency(stats.totalToday)} 
+                  icon={DollarSign} 
+                  gradient="from-green-500 to-emerald-600" 
+                  shadow="shadow-green-500/20"
+                />
+                <StatCard 
+                  title="Pedidos Hoje" 
+                  value={stats.countToday || 0} 
+                  icon={ShoppingBag} 
+                  gradient="from-blue-500 to-indigo-600" 
+                  shadow="shadow-blue-500/20"
+                />
+                <StatCard 
+                  title="Ticket Médio" 
+                  value={formatCurrency(stats.ticketAvg)} 
+                  icon={TrendingUp} 
+                  gradient="from-purple-500 to-fuchsia-600" 
+                  shadow="shadow-purple-500/20"
+                />
               </div>
 
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                  <h3 className="text-lg font-bold mb-4 text-gray-700">Vendas (Últimos 7 dias)</h3>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={stats.salesSeries}>
-                        <defs>
-                          <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#d97706" stopOpacity={0.1}/>
-                            <stop offset="95%" stopColor="#d97706" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
-                        <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
-                        <Area type="monotone" dataKey="total" stroke="#d97706" fillOpacity={1} fill="url(#colorTotal)" strokeWidth={2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+                <ChartCard title="Evolução de Vendas (7 dias)">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={stats.salesSeries}>
+                      <defs>
+                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#d97706" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#d97706" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} tickFormatter={(val)=>`R$${val}`} />
+                      <Tooltip 
+                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}} 
+                        formatter={(val) => formatCurrency(val)}
+                      />
+                      <Area type="monotone" dataKey="total" stroke="#d97706" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </ChartCard>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                  <h3 className="text-lg font-bold mb-4 text-gray-700">Pedidos por Status</h3>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={stats.statusSeries}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
-                        <YAxis axisLine={false} tickLine={false} />
-                        <Tooltip cursor={{fill: '#f9fafb'}} contentStyle={{borderRadius: '8px'}} />
-                        <Bar dataKey="count" fill="#4b5563" radius={[4, 4, 0, 0]} barSize={40} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+                <ChartCard title="Pedidos por Status">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.statusSeries}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
+                      <YAxis axisLine={false} tickLine={false} />
+                      <Tooltip cursor={{fill: '#f9fafb'}} contentStyle={{borderRadius: '12px'}} />
+                      <Bar dataKey="count" fill="#8884d8" radius={[6, 6, 0, 0]} barSize={50} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartCard>
               </div>
             </div>
           )}
 
           {/* VIEW: ORDERS */}
           {view === 'orders' && (
-            <div className="space-y-6 animate-fadeIn">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="space-y-8 animate-fadeIn">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-800">Gerenciamento de Pedidos</h2>
-                  <p className="text-gray-500 text-sm">Acompanhe e atualize os pedidos em tempo real.</p>
-                </div>
-                
-                {/* Status Filters */}
-                <div className="flex bg-white p-1 rounded-lg shadow-sm border border-gray-200 overflow-x-auto max-w-full">
-                  {['all', 'novo', 'preparando', 'pronto', 'entregue'].map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setFilter(st)}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition whitespace-nowrap ${
-                        filter === st 
-                        ? 'bg-amber-100 text-amber-800 shadow-sm' 
-                        : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      {st === 'all' ? 'Todos' : STATUS_CONFIG[st]?.label || st}
-                    </button>
-                  ))}
+                  <h2 className="text-3xl font-black text-gray-800 mb-2">Gerenciamento</h2>
+                  <div className="flex gap-2 text-sm font-medium bg-white p-1 rounded-xl shadow-sm border border-gray-100 inline-flex">
+                    {['all', 'novo', 'preparando', 'pronto', 'entregue'].map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setFilter(st)}
+                        className={`px-4 py-2 rounded-lg transition-all duration-200 ${
+                          filter === st 
+                          ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30' 
+                          : 'text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {st === 'all' ? 'Todos' : STATUS_CONFIG[st]?.label || st}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {loading ? (
-                <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-amber-600" /></div>
+                <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-amber-500" /></div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {filteredOrders.length === 0 ? (
-                    <div className="col-span-full py-20 text-center bg-white rounded-xl border border-dashed border-gray-300">
-                      <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-400">
-                        <ShoppingBag />
+                    <div className="col-span-full py-24 text-center bg-white rounded-3xl border-2 border-dashed border-gray-200">
+                      <div className="mx-auto w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-300">
+                        <ShoppingBag className="w-10 h-10" />
                       </div>
-                      <p className="text-gray-500">Nenhum pedido encontrado com este filtro.</p>
+                      <p className="text-gray-400 font-medium text-lg">Nenhum pedido encontrado nesta categoria.</p>
                     </div>
                   ) : (
                     filteredOrders.map(order => (
@@ -441,8 +495,10 @@ export default function Admin() {
 const SidebarItem = ({ icon: Icon, label, active, onClick, badge }) => (
   <button 
     onClick={onClick}
-    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${
-      active ? 'bg-amber-50 text-amber-900 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+    className={`w-full flex items-center justify-between px-4 py-4 rounded-xl transition-all duration-200 group mb-1 ${
+      active 
+      ? 'bg-amber-50 text-amber-800 font-bold shadow-sm border border-amber-100' 
+      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
     }`}
   >
     <div className="flex items-center gap-3">
@@ -450,112 +506,142 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, badge }) => (
       <span>{label}</span>
     </div>
     {badge > 0 && (
-      <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{badge}</span>
+      <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">{badge}</span>
     )}
   </button>
 );
 
-const StatCard = ({ title, value, icon: Icon, color, bg }) => (
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 transition hover:shadow-md">
-    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${bg} ${color}`}>
+const ToggleButton = ({ active, onClick, iconOn: IconOn, iconOff: IconOff, label }) => (
+  <button 
+    onClick={onClick} 
+    className={`flex items-center gap-3 px-3 py-2 rounded-lg w-full transition text-sm font-medium ${
+      active ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:bg-gray-100'
+    }`}
+  >
+    {active ? <IconOn className="w-4 h-4" /> : <IconOff className="w-4 h-4" />}
+    {label}: <span className="font-bold">{active ? 'ON' : 'OFF'}</span>
+  </button>
+);
+
+const StatCard = ({ title, value, icon: Icon, gradient, shadow }) => (
+  <div className={`relative overflow-hidden bg-white p-6 rounded-3xl shadow-lg border border-gray-100 ${shadow} group`}>
+    <div className={`absolute top-0 right-0 p-4 bg-gradient-to-br ${gradient} text-white rounded-bl-3xl shadow-md`}>
       <Icon className="w-6 h-6" />
     </div>
-    <div>
-      <p className="text-sm text-gray-500 font-medium">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value}</p>
+    <div className="mt-4">
+      <p className="text-gray-400 text-sm font-bold uppercase tracking-wider">{title}</p>
+      <p className="text-3xl font-black text-gray-800 mt-1">{value}</p>
+    </div>
+  </div>
+);
+
+const ChartCard = ({ title, children }) => (
+  <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 h-80">
+    <h3 className="text-lg font-bold text-gray-700 mb-6">{title}</h3>
+    <div className="h-60 w-full">
+      {children}
     </div>
   </div>
 );
 
 const OrderCard = ({ order, onUpdateStatus, onWhatsApp }) => {
-  const statusInfo = STATUS_CONFIG[order.status] || { label: order.status, color: 'bg-gray-100 text-gray-600' };
-  const StatusIcon = statusInfo.icon || User;
+  const statusInfo = STATUS_CONFIG[order.status] || STATUS_CONFIG.novo;
+  const StatusIcon = statusInfo.icon;
   
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col transition-all hover:shadow-md ${order.status === 'novo' ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}>
+    <div className={`bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-1 ${order.status === 'novo' ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}>
       
       {/* Header do Card */}
-      <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+      <div className={`p-4 border-b flex justify-between items-center ${statusInfo.border}`}>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-gray-400">#{order.id.slice(0,6)}</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 ${statusInfo.color}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm ${statusInfo.color}`}>
             <StatusIcon className="w-3 h-3" /> {statusInfo.label}
           </span>
         </div>
-        <div className="text-xs font-medium text-gray-500 flex items-center gap-1">
-          <Clock className="w-3 h-3" /> {formatDate(order.createdAt)}
+        <div className="text-xs font-bold text-gray-500 bg-white/50 px-2 py-1 rounded-md">
+          #{order.id.slice(0,6).toUpperCase()}
         </div>
       </div>
 
       {/* Conteúdo */}
-      <div className="p-4 flex-1">
-        {/* Cliente */}
-        <div className="mb-4">
+      <div className="p-5 flex-1 flex flex-col gap-4">
+        {/* Info Cliente */}
+        <div>
           <div className="flex items-center gap-2 mb-1">
-            <User className="w-4 h-4 text-gray-400" />
-            <span className="font-bold text-gray-800 text-sm truncate">{order.customer?.nome || 'Cliente não id.'}</span>
+            <div className="bg-gray-100 p-1.5 rounded-full"><User className="w-4 h-4 text-gray-600" /></div>
+            <span className="font-bold text-gray-800 text-base">{order.customer?.nome || 'Cliente não id.'}</span>
           </div>
-          <div className="pl-6 text-xs text-gray-500 space-y-1">
-            <div className="flex items-center gap-1"><Phone className="w-3 h-3"/> {order.customer?.telefone || '-'}</div>
-            <div className="flex items-start gap-1">
+          <div className="pl-9 text-xs text-gray-500 space-y-1.5">
+            {order.customer?.telefone && <div className="flex items-center gap-1.5"><Phone className="w-3 h-3"/> {order.customer.telefone}</div>}
+            <div className="flex items-start gap-1.5 leading-tight">
               <MapPin className="w-3 h-3 mt-0.5 shrink-0"/> 
-              <span className="line-clamp-2">
+              <span>
                 {order.customer?.rua ? `${order.customer.rua}, ${order.customer.numero}` : 'Retirada/Sem endereço'}
-                {order.customer?.bairro && ` - ${order.customer.bairro}`}
+                {order.customer?.bairro && <span className="block text-gray-400">{order.customer.bairro}</span>}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Itens */}
-        <div className="bg-gray-50 rounded-lg p-3 text-sm border border-gray-100 mb-4">
+        {/* Lista Itens */}
+        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-sm">
           <ul className="space-y-2">
             {Array.isArray(order.items) ? order.items.map((item, idx) => (
-              <li key={idx} className="flex justify-between items-start text-gray-700">
-                <span className="font-medium mr-2">{item.quantity}x</span>
-                <div className="flex-1">
-                  <span className="block leading-tight">{item.name}</span>
-                  {item.toppings && item.toppings.length > 0 && (
-                    <span className="text-xs text-gray-500 block leading-tight">+ {item.toppings.join(', ')}</span>
-                  )}
+              <li key={idx} className="flex justify-between items-start text-gray-700 border-b border-dashed border-gray-200 last:border-0 pb-2 last:pb-0">
+                <div className="flex gap-2">
+                  <span className="font-bold bg-white border px-1.5 rounded text-xs h-fit mt-0.5">{item.quantity}x</span>
+                  <div>
+                    <span className="block font-medium leading-tight">{item.name}</span>
+                    {item.toppings && item.toppings.length > 0 && (
+                      <span className="text-xs text-gray-500 block leading-tight mt-0.5">+ {item.toppings.join(', ')}</span>
+                    )}
+                  </div>
                 </div>
               </li>
-            )) : <li className="text-gray-400 italic">Sem itens</li>}
+            )) : <li className="text-gray-400 italic text-center py-2">Sem itens</li>}
           </ul>
-        </div>
-        
-        <div className="flex justify-between items-center pt-2 border-t border-gray-100 border-dashed">
-          <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Total</span>
-          <span className="text-lg font-bold text-gray-900">{formatCurrency(order.total)}</span>
         </div>
       </div>
 
-      {/* Ações */}
-      <div className="p-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-2 justify-between">
-        <div className="flex gap-1">
+      {/* Footer / Ações */}
+      <div className="p-4 bg-gray-50 border-t border-gray-100">
+        <div className="flex justify-between items-center mb-4">
+           <div className="flex items-center gap-1.5 text-xs text-gray-400">
+             <Clock className="w-3 h-3" /> {formatDate(order.createdAt)}
+           </div>
+           <span className="text-lg font-black text-gray-800">{formatCurrency(order.total)}</span>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
           {order.status === 'novo' && (
-            <button onClick={() => onUpdateStatus(order.id, 'preparando')} title="Aceitar e Preparar" className="p-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition">
-              <span className="text-xs font-bold">Aceitar</span>
+            <button onClick={() => onUpdateStatus(order.id, 'preparando')} title="Aceitar" className="col-span-3 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg font-bold shadow-lg shadow-amber-500/30 transition active:scale-95 flex items-center justify-center gap-2">
+              <Zap className="w-4 h-4" /> Aceitar Pedido
             </button>
           )}
           {order.status === 'preparando' && (
-            <button onClick={() => onUpdateStatus(order.id, 'pronto')} title="Marcar Pronto" className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition">
-              <Check className="w-4 h-4" />
+            <button onClick={() => onUpdateStatus(order.id, 'pronto')} title="Pronto" className="col-span-3 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-bold shadow-lg shadow-green-500/30 transition active:scale-95 flex items-center justify-center gap-2">
+              <Check className="w-4 h-4" /> Marcar Pronto
             </button>
           )}
           {order.status === 'pronto' && (
-            <button onClick={() => onUpdateStatus(order.id, 'entregue')} title="Marcar Entregue" className="p-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition">
-              <Check className="w-4 h-4" />
+            <button onClick={() => onUpdateStatus(order.id, 'entregue')} title="Entregue" className="col-span-3 bg-gray-700 hover:bg-gray-800 text-white py-2 rounded-lg font-bold shadow-lg shadow-gray-700/30 transition active:scale-95 flex items-center justify-center gap-2">
+              <Check className="w-4 h-4" /> Finalizar
             </button>
           )}
+          {order.status === 'entregue' && (
+             <div className="col-span-3 bg-gray-100 text-gray-400 py-2 rounded-lg font-bold text-center text-sm flex items-center justify-center gap-2 cursor-not-allowed">
+               <Check className="w-4 h-4" /> Concluído
+             </div>
+          )}
+          
+          <button 
+            onClick={() => onWhatsApp(order)} 
+            className="bg-white border-2 border-green-500 text-green-600 hover:bg-green-50 py-2 rounded-lg flex items-center justify-center transition active:scale-95"
+            title="Chamar no WhatsApp"
+          >
+            <MessageCircle className="w-5 h-5" />
+          </button>
         </div>
-        
-        <button 
-          onClick={() => onWhatsApp(order)} 
-          className="flex-1 flex items-center justify-center gap-2 bg-white border border-green-500 text-green-600 hover:bg-green-50 py-1.5 px-3 rounded-lg text-xs font-bold transition"
-        >
-          <MessageCircle className="w-4 h-4" /> Motoboy
-        </button>
       </div>
     </div>
   );
