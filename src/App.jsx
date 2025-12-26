@@ -3,16 +3,18 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   ShoppingCart, Plus, Minus, X, Home, ChevronRight, Truck, MapPin,
   Loader2, Cake, Heart, Trash2, Check, Clock, Utensils, Star, Phone,
-  QrCode, Copy, CreditCard, Bike, Package
+  QrCode, Copy, CreditCard, Bike, Package, User, Lock, Gift, LogOut
 } from "lucide-react";
 
 /* ------------- CONFIGURAÇÕES ------------- */
 const COLLECTION_ORDERS = "doceeser_pedidos";
+const COLLECTION_CLIENTS = "doceeser_clients"; // Nova tabela de clientes
 const DELIVERY_FEE = 2.99;
 const ETA_TEXT = "20–35 min";
+const LOYALTY_GOAL = 10; // Meta de pedidos para ganhar brinde
 
 // ⚠️ IMPORTANTE: Em produção, use Edge Functions para esconder esta chave!
-const ABACATE_API_KEY = "sk_test_..."; // Coloque sua chave API da AbacatePay aqui
+const ABACATE_API_KEY = "sk_test_..."; 
 
 // Chaves do Supabase
 const SUPABASE_URL = 'https://elpinlotdogazhpdwlqr.supabase.co';
@@ -218,12 +220,15 @@ export default function App() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [acaiModalProduct, setAcaiModalProduct] = useState(null);
   
-  // Estado do Pagamento
+  // Auth & Loyalty
+  const [user, setUser] = useState(null); // { name, phone, password, address, orders_count }
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [loyaltyProgress, setLoyaltyProgress] = useState(0);
+
+  // Pagamento & Pedido
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
-  
-  // Dados do pedido
   const [customer, setCustomer] = useState({ nome: '', telefone: '', rua: '', numero: '', bairro: '' });
   const [lastOrderId, setLastOrderId] = useState(null);
   const [orderStatus, setOrderStatus] = useState('novo');
@@ -245,6 +250,37 @@ export default function App() {
     document.body.appendChild(script);
   }, []);
 
+  // --- 2. PERSISTÊNCIA DE USUÁRIO E FIDELIDADE ---
+  useEffect(() => {
+    const storedUser = localStorage.getItem('doceeser_user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      setCustomer({
+        nome: parsedUser.name,
+        telefone: parsedUser.phone,
+        rua: parsedUser.address?.rua || '',
+        numero: parsedUser.address?.numero || '',
+        bairro: parsedUser.address?.bairro || ''
+      });
+      fetchLoyalty(parsedUser.phone);
+    }
+  }, [supabase]);
+
+  const fetchLoyalty = async (phone) => {
+    if (!supabase || !phone) return;
+    // Conta quantos pedidos este telefone já fez (status entregue)
+    const { count, error } = await supabase
+      .from(COLLECTION_ORDERS)
+      .select('*', { count: 'exact', head: true })
+      .eq('customer->>telefone', phone)
+      .eq('status', 'entregue');
+    
+    if (!error) {
+      setLoyaltyProgress(count || 0);
+    }
+  };
+
   // --- CARRINHO ---
   const addToCart = (product, quantity = 1, toppings = []) => {
     const uniqueId = product.isCustom ? product.uniqueId : product.id;
@@ -263,6 +299,71 @@ export default function App() {
 
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const finalTotal = cartTotal + DELIVERY_FEE;
+
+  // --- AUTHENTICATION HANDLERS ---
+  const handleAuth = async (type, data) => {
+    if (!supabase) return alert("Erro de conexão.");
+
+    if (type === 'login') {
+      const { data: userData, error } = await supabase
+        .from(COLLECTION_CLIENTS)
+        .select('*')
+        .eq('phone', data.phone)
+        .single();
+
+      if (userData && userData.password === data.password) {
+        loginUser(userData);
+      } else {
+        alert("Telefone ou senha incorretos.");
+      }
+    } else if (type === 'register') {
+      // Verificar se já existe
+      const { data: existing } = await supabase
+        .from(COLLECTION_CLIENTS)
+        .select('phone')
+        .eq('phone', data.phone)
+        .single();
+
+      if (existing) return alert("Este telefone já possui cadastro.");
+
+      const newUser = {
+        phone: data.phone,
+        password: data.password,
+        name: data.name,
+        address: {}, // Endereço começa vazio
+        created_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase.from(COLLECTION_CLIENTS).insert(newUser);
+      if (error) {
+        alert("Erro ao criar conta.");
+      } else {
+        loginUser(newUser);
+      }
+    }
+  };
+
+  const loginUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem('doceeser_user', JSON.stringify(userData));
+    setCustomer(prev => ({
+      ...prev,
+      nome: userData.name,
+      telefone: userData.phone,
+      rua: userData.address?.rua || '',
+      numero: userData.address?.numero || '',
+      bairro: userData.address?.bairro || ''
+    }));
+    fetchLoyalty(userData.phone);
+    setAuthModalOpen(false);
+  };
+
+  const logoutUser = () => {
+    setUser(null);
+    localStorage.removeItem('doceeser_user');
+    setLoyaltyProgress(0);
+    setCustomer({ nome: '', telefone: '', rua: '', numero: '', bairro: '' });
+  };
 
   // --- INTEGRAÇÃO ABACATE PAY ---
   const createAbacateCharge = async () => {
@@ -313,6 +414,14 @@ export default function App() {
     if (!customer.nome || !customer.telefone || !customer.rua) {
       return alert("Por favor, preencha seus dados de entrega.");
     }
+    
+    // Atualizar endereço do usuário se logado
+    if (user && supabase) {
+      await supabase.from(COLLECTION_CLIENTS).update({
+        address: { rua: customer.rua, numero: customer.numero, bairro: customer.bairro }
+      }).eq('phone', user.phone);
+    }
+
     setIsProcessingPayment(true);
     const billing = await createAbacateCharge();
     setIsProcessingPayment(false);
@@ -335,7 +444,7 @@ export default function App() {
       createdAt: new Date().toISOString(),
       total: finalTotal,
       items: cart,
-      customer: customer,
+      customer: customer, // Salva os dados do cliente no pedido
       paymentMethod: 'PIX',
       paymentStatus: 'Aguardando Confirmação'
     };
@@ -357,6 +466,117 @@ export default function App() {
 
   // --- COMPONENTES VISUAIS ---
   
+  const AuthModal = () => {
+    if (!authModalOpen) return null;
+    const [isRegister, setIsRegister] = useState(false);
+    const [formData, setFormData] = useState({ name: '', phone: '', password: '', confirmPassword: '' });
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      if (isRegister) {
+        if (formData.password !== formData.confirmPassword) return alert("Senhas não conferem.");
+        if (formData.password.length < 4) return alert("Senha muito curta.");
+        handleAuth('register', formData);
+      } else {
+        handleAuth('login', formData);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+        <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative animate-slideUp">
+          <button onClick={() => setAuthModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X /></button>
+          
+          <div className="text-center mb-6">
+            <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-amber-600">
+              {isRegister ? <User className="w-8 h-8"/> : <Lock className="w-8 h-8"/>}
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800">{isRegister ? 'Criar Conta' : 'Bem-vindo de volta!'}</h2>
+            <p className="text-sm text-gray-500">{isRegister ? 'Ganhe brindes exclusivos.' : 'Acesse seus pedidos e fidelidade.'}</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isRegister && (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase">Nome</label>
+                <input required type="text" className="w-full p-3 bg-gray-50 rounded-xl border focus:border-amber-500 outline-none" placeholder="Seu nome" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase">Telefone (Celular)</label>
+              <input required type="tel" className="w-full p-3 bg-gray-50 rounded-xl border focus:border-amber-500 outline-none" placeholder="11999999999" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-500 uppercase">Senha</label>
+              <input required type="password" className="w-full p-3 bg-gray-50 rounded-xl border focus:border-amber-500 outline-none" placeholder="******" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+            </div>
+            {isRegister && (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase">Confirmar Senha</label>
+                <input required type="password" className="w-full p-3 bg-gray-50 rounded-xl border focus:border-amber-500 outline-none" placeholder="******" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+              </div>
+            )}
+
+            <button type="submit" className="w-full bg-amber-600 text-white py-3 rounded-xl font-bold hover:bg-amber-700 transition shadow-lg shadow-amber-600/20">
+              {isRegister ? 'Cadastrar' : 'Entrar'}
+            </button>
+          </form>
+
+          <div className="mt-4 text-center">
+            <button onClick={() => setIsRegister(!isRegister)} className="text-sm text-amber-700 font-semibold hover:underline">
+              {isRegister ? 'Já tenho conta? Entrar' : 'Não tem conta? Cadastre-se'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const LoyaltyCard = () => {
+    // Calcula brindes ganhos
+    const giftsEarned = Math.floor(loyaltyProgress / LOYALTY_GOAL);
+    const progressCurrent = loyaltyProgress % LOYALTY_GOAL;
+    const percentage = (progressCurrent / LOYALTY_GOAL) * 100;
+
+    return (
+      <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-xl shadow-indigo-200 mb-8 relative overflow-hidden">
+        {/* Confetti Effect bg */}
+        <div className="absolute top-0 right-0 opacity-10"><Gift className="w-48 h-48 -mr-10 -mt-10" /></div>
+        
+        <div className="relative z-10">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-xl font-bold flex items-center gap-2"><Star className="w-5 h-5 text-yellow-300 fill-current"/> Clube Doce Fidelidade</h3>
+              <p className="text-indigo-100 text-sm">Peça {LOYALTY_GOAL} vezes e ganhe um brinde!</p>
+            </div>
+            <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/30">
+              {loyaltyProgress} Pedidos Totais
+            </div>
+          </div>
+
+          <div className="bg-black/20 rounded-full h-4 w-full mb-2 overflow-hidden border border-white/10">
+            <div className="bg-gradient-to-r from-yellow-300 to-amber-500 h-full transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
+          </div>
+          
+          <div className="flex justify-between text-xs font-bold text-indigo-100 mb-4">
+            <span>0</span>
+            <span>{LOYALTY_GOAL} Pedidos</span>
+          </div>
+
+          {giftsEarned > 0 && (
+            <div className="bg-white text-indigo-900 p-3 rounded-xl flex items-center gap-3 shadow-lg animate-pulse">
+              <Gift className="w-6 h-6 text-purple-600" />
+              <div>
+                <p className="font-bold leading-tight">Você tem {giftsEarned} brinde(s) disponível(is)!</p>
+                <p className="text-xs text-indigo-700">Solicite na observação do próximo pedido.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const ProductCard = ({ product }) => (
     <div className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
       <div className="h-48 overflow-hidden relative bg-gray-100">
@@ -526,29 +746,30 @@ export default function App() {
   
   const MenuPage = (
     <div className="pb-32">
-      {/* Hero Section */}
-      <div className="relative mx-4 mt-6 mb-8 rounded-3xl overflow-hidden shadow-2xl shadow-amber-900/10 bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 text-white p-8">
-        <div className="relative z-10 max-w-lg">
-          <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold mb-3 border border-white/20">Doce É Ser</div>
-          <h2 className="text-3xl md:text-4xl font-extrabold mb-3 leading-tight">O doce equilíbrio <br/>que o seu dia precisa. 🍰</h2>
-          <p className="text-amber-100 mb-6 text-sm md:text-base opacity-90 leading-relaxed">Experimente nossos bolos artesanais e açaís montados na hora com ingredientes premium.</p>
-          <div className="flex gap-3">
-            <button onClick={() => setCategoryFilter('all')} className="bg-white text-amber-800 px-6 py-2.5 rounded-full font-bold text-sm shadow-lg hover:bg-gray-50 transition active:scale-95">
-              Ver Tudo
-            </button>
-            <button onClick={() => setCategoryFilter('bolos')} className="bg-amber-800/50 backdrop-blur-sm text-white border border-white/20 px-6 py-2.5 rounded-full font-bold text-sm hover:bg-amber-800/70 transition">
-              Bolos
-            </button>
+      {/* Hero Section / Loyalty */}
+      {user ? (
+        <div className="px-4 mt-6">
+          <LoyaltyCard />
+        </div>
+      ) : (
+        <div className="relative mx-4 mt-6 mb-8 rounded-3xl overflow-hidden shadow-2xl shadow-amber-900/10 bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 text-white p-8">
+          <div className="relative z-10 max-w-lg">
+            <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold mb-3 border border-white/20">Doce É Ser</div>
+            <h2 className="text-3xl md:text-4xl font-extrabold mb-3 leading-tight">O doce equilíbrio <br/>que o seu dia precisa. 🍰</h2>
+            <p className="text-amber-100 mb-6 text-sm md:text-base opacity-90 leading-relaxed">Crie sua conta para ganhar brindes exclusivos!</p>
+            <div className="flex gap-3">
+              <button onClick={() => setAuthModalOpen(true)} className="bg-white text-amber-800 px-6 py-2.5 rounded-full font-bold text-sm shadow-lg hover:bg-gray-50 transition active:scale-95">
+                Criar Conta / Entrar
+              </button>
+            </div>
+          </div>
+          {/* Decorative Elements */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+          <div className="absolute right-[-20px] bottom-[-40px] opacity-20 rotate-12">
+             <Cake className="w-64 h-64 text-white" />
           </div>
         </div>
-        
-        {/* Decorative Elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 right-10 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl"></div>
-        <div className="absolute right-[-20px] bottom-[-40px] opacity-20 rotate-12">
-           <Cake className="w-64 h-64 text-white" />
-        </div>
-      </div>
+      )}
 
       {/* Categorias Sticky */}
       <div className="sticky top-[72px] z-30 bg-gray-50/95 backdrop-blur-md py-4 border-b border-gray-200/50 mb-6">
@@ -647,6 +868,13 @@ export default function App() {
 
           {/* Dados e Resumo */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+            {!user && (
+              <div onClick={() => setAuthModalOpen(true)} className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-3 cursor-pointer hover:bg-blue-100 transition">
+                <User className="text-blue-600 w-5 h-5" />
+                <p className="text-sm text-blue-800 font-medium">Faça login para salvar seus dados e ganhar pontos!</p>
+              </div>
+            )}
+
             <div>
               <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-amber-600"/> Entrega
@@ -783,17 +1011,36 @@ export default function App() {
               <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Confeitaria Artesanal</span>
             </div>
           </div>
-          <button 
-            onClick={() => setPage('cart')} 
-            className={`relative p-3 rounded-xl transition-all duration-300 ${cart.length > 0 ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'hover:bg-gray-100 text-gray-600'}`}
-          >
-            <ShoppingCart className="w-5 h-5" />
-            {cart.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md border-2 border-white transform scale-100 animate-bounce">
-                {cart.reduce((a,b)=>a+b.quantity,0)}
-              </span>
+          
+          <div className="flex gap-2">
+            {user ? (
+              <button 
+                onClick={() => { if(confirm("Deseja sair?")) logoutUser(); }} 
+                className="p-3 bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-500 rounded-xl transition"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            ) : (
+              <button 
+                onClick={() => setAuthModalOpen(true)} 
+                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 transition"
+              >
+                <User className="w-4 h-4" /> Entrar
+              </button>
             )}
-          </button>
+
+            <button 
+              onClick={() => setPage('cart')} 
+              className={`relative p-3 rounded-xl transition-all duration-300 ${cart.length > 0 ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'hover:bg-gray-100 text-gray-600'}`}
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {cart.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md border-2 border-white transform scale-100 animate-bounce">
+                  {cart.reduce((a,b)=>a+b.quantity,0)}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -807,6 +1054,7 @@ export default function App() {
       {/* Modals */}
       <AcaiModal />
       <PaymentModal />
+      <AuthModal />
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-10 text-center">
