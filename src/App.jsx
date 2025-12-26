@@ -3,7 +3,8 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   ShoppingCart, Plus, Minus, X, Home, ChevronRight, Truck, MapPin,
   Loader2, Cake, Heart, Trash2, Check, Clock, Utensils, Star, Phone,
-  QrCode, Copy, CreditCard, Bike, Package, User, Lock, Gift, LogOut
+  QrCode, Copy, CreditCard, Bike, Package, User, Lock, Gift, LogOut,
+  ChevronDown
 } from "lucide-react";
 
 /* ------------- CONFIGURAÇÕES ------------- */
@@ -11,6 +12,9 @@ const COLLECTION_ORDERS = "doceeser_pedidos"; // Usaremos esta tabela para TUDO 
 const DELIVERY_FEE = 2.99;
 const ETA_TEXT = "20–35 min";
 const LOYALTY_GOAL = 10; 
+
+// URL DA LOGO ATUALIZADA
+const LOGO_URL = "https://i.imgur.com/4LsEEuy.jpeg";
 
 // ⚠️ IMPORTANTE: Em produção, use Edge Functions para esconder esta chave!
 const ABACATE_API_KEY = "sk_test_..."; 
@@ -222,6 +226,7 @@ export default function App() {
   // Auth & Loyalty
   const [user, setUser] = useState(null); 
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false); // Novo estado para o menu
   const [loyaltyProgress, setLoyaltyProgress] = useState(0);
 
   // Pagamento & Pedido
@@ -303,22 +308,18 @@ export default function App() {
   const finalTotal = cartTotal + DELIVERY_FEE;
 
   // --- AUTHENTICATION (USANDO TABELA DE PEDIDOS COMO FALLBACK) ---
-  // Estratégia: Salvar usuário como um "pedido" especial com status='user_account'
-  // ID do registro será: "user_TELEFONE" para garantir unicidade.
-  
   const handleAuth = async (type, data) => {
     if (!supabase) return alert("Conectando ao servidor... tente novamente.");
 
-    const userId = `user_${data.phone.replace(/\D/g, '')}`; // Remove caracteres não numéricos
+    const userId = `user_${data.phone.replace(/\D/g, '')}`; 
 
     try {
       if (type === 'login') {
-        // Busca na tabela de pedidos pelo ID de usuário
         const { data: userData, error } = await supabase
           .from(COLLECTION_ORDERS)
           .select('customer')
           .eq('id', userId)
-          .maybeSingle(); // maybeSingle não joga erro se não achar
+          .maybeSingle();
 
         if (userData && userData.customer && userData.customer.password === data.password) {
           loginUser(userData.customer);
@@ -327,7 +328,6 @@ export default function App() {
         }
 
       } else if (type === 'register') {
-        // Verifica se já existe
         const { data: existing } = await supabase
           .from(COLLECTION_ORDERS)
           .select('id')
@@ -344,13 +344,12 @@ export default function App() {
           createdAt: new Date().toISOString()
         };
 
-        // Salva na tabela de pedidos com status especial
         const { error } = await supabase.from(COLLECTION_ORDERS).insert({
           id: userId,
-          status: 'user_account', // Status especial para filtrar no admin
+          status: 'user_account', 
           total: 0,
           customer: newUserProfile,
-          items: [] // Array vazio para não quebrar admin
+          items: []
         });
 
         if (error) {
@@ -387,6 +386,7 @@ export default function App() {
     localStorage.removeItem('doceeser_user');
     setLoyaltyProgress(0);
     setCustomer({ nome: '', telefone: '', rua: '', numero: '', bairro: '' });
+    setIsUserMenuOpen(false);
   };
 
   // --- INTEGRAÇÃO ABACATE PAY ---
@@ -439,13 +439,10 @@ export default function App() {
       return alert("Por favor, preencha seus dados de entrega.");
     }
     
-    // Atualizar endereço do usuário na nuvem (se logado)
     if (user && supabase) {
       const newAddress = { rua: customer.rua, numero: customer.numero, bairro: customer.bairro };
       const userId = `user_${user.phone.replace(/\D/g, '')}`;
       
-      // Atualiza o registro "conta" na tabela de pedidos
-      // Precisamos pegar o customer atual e atualizar o endereço dentro do JSON
       const updatedCustomer = { ...user, address: newAddress };
       
       await supabase
@@ -453,7 +450,6 @@ export default function App() {
         .update({ customer: updatedCustomer })
         .eq('id', userId);
         
-      // Atualiza localmente
       setUser(updatedCustomer);
       localStorage.setItem('doceeser_user', JSON.stringify(updatedCustomer));
     }
@@ -480,7 +476,7 @@ export default function App() {
       createdAt: new Date().toISOString(),
       total: finalTotal,
       items: cart,
-      customer: customer, // Salva os dados do cliente no pedido
+      customer: customer, 
       paymentMethod: 'PIX',
       paymentStatus: 'Aguardando Confirmação'
     };
@@ -569,14 +565,12 @@ export default function App() {
   };
 
   const LoyaltyCard = () => {
-    // Calcula brindes ganhos
     const giftsEarned = Math.floor(loyaltyProgress / LOYALTY_GOAL);
     const progressCurrent = loyaltyProgress % LOYALTY_GOAL;
     const percentage = (progressCurrent / LOYALTY_GOAL) * 100;
 
     return (
       <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-xl shadow-indigo-200 mb-8 relative overflow-hidden">
-        {/* Confetti Effect bg */}
         <div className="absolute top-0 right-0 opacity-10"><Gift className="w-48 h-48 -mr-10 -mt-10" /></div>
         
         <div className="relative z-10">
@@ -1038,24 +1032,46 @@ export default function App() {
       {/* Header Fixo */}
       <header className="sticky top-0 bg-white/90 backdrop-blur-lg shadow-sm z-40 px-4 py-3 border-b border-gray-100">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setPage('menu')}>
-            <div className="bg-amber-100 p-2 rounded-xl group-hover:bg-amber-200 transition-colors">
-              <Cake className="w-6 h-6 text-amber-600" />
-            </div>
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setPage('menu')}>
+            {/* Logo Minimalista */}
+            <img 
+                src={LOGO_URL} 
+                alt="Doce É Ser" 
+                className="h-10 w-auto object-contain rounded-lg transition-transform group-hover:scale-105" 
+            />
+            {/* Nome da Loja ao lado da Logo */}
             <div>
-              <h1 className="font-extrabold text-lg tracking-tight text-gray-800 leading-none">Doce É Ser</h1>
-              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Confeitaria Artesanal</span>
+              <h1 className="font-bold text-lg text-gray-800 leading-tight">Doce É Ser</h1>
             </div>
           </div>
           
           <div className="flex gap-2">
             {user ? (
-              <button 
-                onClick={() => { if(confirm("Deseja sair?")) logoutUser(); }} 
-                className="p-3 bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-500 rounded-xl transition"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} 
+                  className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-xl transition"
+                >
+                  <div className="bg-amber-100 p-1 rounded-full"><User className="w-4 h-4 text-amber-700"/></div>
+                  <span className="text-sm font-bold hidden sm:inline">{user.name.split(' ')[0]}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isUserMenuOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-fadeIn">
+                    <div className="p-4 border-b border-gray-50 bg-gray-50/50">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Logado como</p>
+                      <p className="font-bold text-gray-800 truncate text-sm">{user.name}</p>
+                    </div>
+                    <button 
+                      onClick={logoutUser} 
+                      className="w-full text-left px-4 py-3 text-red-600 hover:bg-red-50 text-sm font-bold flex items-center gap-2 transition rounded-xl"
+                    >
+                      <LogOut className="w-4 h-4" /> Sair da conta
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <button 
                 onClick={() => setAuthModalOpen(true)} 
