@@ -269,15 +269,22 @@ export default function App() {
 
   const fetchLoyalty = async (phone) => {
     if (!supabase || !phone) return;
-    // Conta quantos pedidos este telefone já fez (status entregue)
-    const { count, error } = await supabase
-      .from(COLLECTION_ORDERS)
-      .select('*', { count: 'exact', head: true })
-      .eq('customer->>telefone', phone)
-      .eq('status', 'entregue');
-    
-    if (!error) {
-      setLoyaltyProgress(count || 0);
+    try {
+      // Conta quantos pedidos este telefone já fez (status entregue)
+      const { count, error } = await supabase
+        .from(COLLECTION_ORDERS)
+        .select('*', { count: 'exact', head: true })
+        .eq('customer->>telefone', phone)
+        .eq('status', 'entregue');
+      
+      if (!error) {
+        setLoyaltyProgress(count || 0);
+      } else {
+        // Se der erro na busca de pedidos, assume 0 ou pega do localStorage se disponível (para fidelidade é mais complexo simular backend)
+        console.warn("Erro ao buscar fidelidade:", error);
+      }
+    } catch (e) {
+      console.warn("Erro conexão fidelidade", e);
     }
   };
 
@@ -300,46 +307,86 @@ export default function App() {
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const finalTotal = cartTotal + DELIVERY_FEE;
 
-  // --- AUTHENTICATION HANDLERS ---
+  // --- AUTHENTICATION HANDLERS (Com Fallback para LocalStorage) ---
   const handleAuth = async (type, data) => {
-    if (!supabase) return alert("Erro de conexão.");
+    // Se não tiver conexão nenhuma, tenta fallback local direto
+    
+    try {
+      if (type === 'login') {
+        let userData = null;
+        let authError = null;
 
-    if (type === 'login') {
-      const { data: userData, error } = await supabase
-        .from(COLLECTION_CLIENTS)
-        .select('*')
-        .eq('phone', data.phone)
-        .single();
+        // Tenta Supabase
+        if (supabase) {
+          const res = await supabase
+            .from(COLLECTION_CLIENTS)
+            .select('*')
+            .eq('phone', data.phone)
+            .single();
+          
+          if (res.data) userData = res.data;
+          if (res.error) authError = res.error;
+        }
 
-      if (userData && userData.password === data.password) {
-        loginUser(userData);
-      } else {
-        alert("Telefone ou senha incorretos.");
-      }
-    } else if (type === 'register') {
-      // Verificar se já existe
-      const { data: existing } = await supabase
-        .from(COLLECTION_CLIENTS)
-        .select('phone')
-        .eq('phone', data.phone)
-        .single();
+        // Fallback LocalStorage se não encontrou no Supabase (ou erro 404)
+        if (!userData) {
+          const localClients = JSON.parse(localStorage.getItem('doceeser_local_clients') || '[]');
+          userData = localClients.find(u => u.phone === data.phone);
+        }
 
-      if (existing) return alert("Este telefone já possui cadastro.");
+        if (userData && userData.password === data.password) {
+          loginUser(userData);
+        } else {
+          alert("Telefone ou senha incorretos (ou conta não criada).");
+        }
 
-      const newUser = {
-        phone: data.phone,
-        password: data.password,
-        name: data.name,
-        address: {}, // Endereço começa vazio
-        created_at: new Date().toISOString()
-      };
+      } else if (type === 'register') {
+        let existing = false;
 
-      const { error } = await supabase.from(COLLECTION_CLIENTS).insert(newUser);
-      if (error) {
-        alert("Erro ao criar conta.");
-      } else {
+        // Verifica existência (Supabase)
+        if (supabase) {
+          const { data: serverExisting, error } = await supabase
+            .from(COLLECTION_CLIENTS)
+            .select('phone')
+            .eq('phone', data.phone)
+            .single();
+          if (serverExisting) existing = true;
+        }
+
+        // Verifica existência (LocalStorage)
+        const localClients = JSON.parse(localStorage.getItem('doceeser_local_clients') || '[]');
+        if (localClients.find(u => u.phone === data.phone)) existing = true;
+
+        if (existing) return alert("Este telefone já possui cadastro.");
+
+        const newUser = {
+          phone: data.phone,
+          password: data.password,
+          name: data.name,
+          address: {}, 
+          created_at: new Date().toISOString()
+        };
+
+        // Tenta salvar Supabase
+        let savedToCloud = false;
+        if (supabase) {
+          const { error } = await supabase.from(COLLECTION_CLIENTS).insert(newUser);
+          if (!error) savedToCloud = true;
+        }
+
+        // Salva LocalStorage (Backup ou Principal se tabela não existir)
+        localClients.push(newUser);
+        localStorage.setItem('doceeser_local_clients', JSON.stringify(localClients));
+
+        if (!savedToCloud) {
+          console.warn("Conta criada apenas localmente (Tabela Supabase não encontrada).");
+        }
+
         loginUser(newUser);
       }
+    } catch (e) {
+      console.error("Auth error:", e);
+      alert("Erro ao processar login.");
     }
   };
 
@@ -415,11 +462,26 @@ export default function App() {
       return alert("Por favor, preencha seus dados de entrega.");
     }
     
-    // Atualizar endereço do usuário se logado
-    if (user && supabase) {
-      await supabase.from(COLLECTION_CLIENTS).update({
-        address: { rua: customer.rua, numero: customer.numero, bairro: customer.bairro }
-      }).eq('phone', user.phone);
+    // Atualizar endereço do usuário se logado (Com Fallback)
+    if (user) {
+      const newAddress = { rua: customer.rua, numero: customer.numero, bairro: customer.bairro };
+      
+      // Tenta atualizar no Supabase
+      if (supabase) {
+        await supabase.from(COLLECTION_CLIENTS).update({ address: newAddress }).eq('phone', user.phone);
+      }
+      
+      // Atualiza no LocalStorage
+      const localClients = JSON.parse(localStorage.getItem('doceeser_local_clients') || '[]');
+      const updatedClients = localClients.map(u => 
+        u.phone === user.phone ? { ...u, address: newAddress } : u
+      );
+      localStorage.setItem('doceeser_local_clients', JSON.stringify(updatedClients));
+      
+      // Atualiza sessão local
+      const updatedUser = { ...user, address: newAddress };
+      setUser(updatedUser);
+      localStorage.setItem('doceeser_user', JSON.stringify(updatedUser));
     }
 
     setIsProcessingPayment(true);
