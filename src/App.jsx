@@ -7,11 +7,10 @@ import {
 } from "lucide-react";
 
 /* ------------- CONFIGURAÇÕES ------------- */
-const COLLECTION_ORDERS = "doceeser_pedidos";
-const COLLECTION_CLIENTS = "doceeser_clients"; // Nova tabela de clientes
+const COLLECTION_ORDERS = "doceeser_pedidos"; // Usaremos esta tabela para TUDO (pedidos e usuarios)
 const DELIVERY_FEE = 2.99;
 const ETA_TEXT = "20–35 min";
-const LOYALTY_GOAL = 10; // Meta de pedidos para ganhar brinde
+const LOYALTY_GOAL = 10; 
 
 // ⚠️ IMPORTANTE: Em produção, use Edge Functions para esconder esta chave!
 const ABACATE_API_KEY = "sk_test_..."; 
@@ -221,7 +220,7 @@ export default function App() {
   const [acaiModalProduct, setAcaiModalProduct] = useState(null);
   
   // Auth & Loyalty
-  const [user, setUser] = useState(null); // { name, phone, password, address, orders_count }
+  const [user, setUser] = useState(null); 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [loyaltyProgress, setLoyaltyProgress] = useState(0);
 
@@ -270,7 +269,6 @@ export default function App() {
   const fetchLoyalty = async (phone) => {
     if (!supabase || !phone) return;
     try {
-      // Conta quantos pedidos este telefone já fez (status entregue)
       const { count, error } = await supabase
         .from(COLLECTION_ORDERS)
         .select('*', { count: 'exact', head: true })
@@ -279,9 +277,6 @@ export default function App() {
       
       if (!error) {
         setLoyaltyProgress(count || 0);
-      } else {
-        // Se der erro na busca de pedidos, assume 0 ou pega do localStorage se disponível (para fidelidade é mais complexo simular backend)
-        console.warn("Erro ao buscar fidelidade:", error);
       }
     } catch (e) {
       console.warn("Erro conexão fidelidade", e);
@@ -307,86 +302,68 @@ export default function App() {
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const finalTotal = cartTotal + DELIVERY_FEE;
 
-  // --- AUTHENTICATION HANDLERS (Com Fallback para LocalStorage) ---
+  // --- AUTHENTICATION (USANDO TABELA DE PEDIDOS COMO FALLBACK) ---
+  // Estratégia: Salvar usuário como um "pedido" especial com status='user_account'
+  // ID do registro será: "user_TELEFONE" para garantir unicidade.
+  
   const handleAuth = async (type, data) => {
-    // Se não tiver conexão nenhuma, tenta fallback local direto
-    
+    if (!supabase) return alert("Conectando ao servidor... tente novamente.");
+
+    const userId = `user_${data.phone.replace(/\D/g, '')}`; // Remove caracteres não numéricos
+
     try {
       if (type === 'login') {
-        let userData = null;
-        let authError = null;
+        // Busca na tabela de pedidos pelo ID de usuário
+        const { data: userData, error } = await supabase
+          .from(COLLECTION_ORDERS)
+          .select('customer')
+          .eq('id', userId)
+          .maybeSingle(); // maybeSingle não joga erro se não achar
 
-        // Tenta Supabase
-        if (supabase) {
-          const res = await supabase
-            .from(COLLECTION_CLIENTS)
-            .select('*')
-            .eq('phone', data.phone)
-            .single();
-          
-          if (res.data) userData = res.data;
-          if (res.error) authError = res.error;
-        }
-
-        // Fallback LocalStorage se não encontrou no Supabase (ou erro 404)
-        if (!userData) {
-          const localClients = JSON.parse(localStorage.getItem('doceeser_local_clients') || '[]');
-          userData = localClients.find(u => u.phone === data.phone);
-        }
-
-        if (userData && userData.password === data.password) {
-          loginUser(userData);
+        if (userData && userData.customer && userData.customer.password === data.password) {
+          loginUser(userData.customer);
         } else {
-          alert("Telefone ou senha incorretos (ou conta não criada).");
+          alert("Telefone não encontrado ou senha incorreta.");
         }
 
       } else if (type === 'register') {
-        let existing = false;
-
-        // Verifica existência (Supabase)
-        if (supabase) {
-          const { data: serverExisting, error } = await supabase
-            .from(COLLECTION_CLIENTS)
-            .select('phone')
-            .eq('phone', data.phone)
-            .single();
-          if (serverExisting) existing = true;
-        }
-
-        // Verifica existência (LocalStorage)
-        const localClients = JSON.parse(localStorage.getItem('doceeser_local_clients') || '[]');
-        if (localClients.find(u => u.phone === data.phone)) existing = true;
+        // Verifica se já existe
+        const { data: existing } = await supabase
+          .from(COLLECTION_ORDERS)
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
 
         if (existing) return alert("Este telefone já possui cadastro.");
 
-        const newUser = {
+        const newUserProfile = {
+          name: data.name,
           phone: data.phone,
           password: data.password,
-          name: data.name,
-          address: {}, 
-          created_at: new Date().toISOString()
+          address: {},
+          createdAt: new Date().toISOString()
         };
 
-        // Tenta salvar Supabase
-        let savedToCloud = false;
-        if (supabase) {
-          const { error } = await supabase.from(COLLECTION_CLIENTS).insert(newUser);
-          if (!error) savedToCloud = true;
+        // Salva na tabela de pedidos com status especial
+        const { error } = await supabase.from(COLLECTION_ORDERS).insert({
+          id: userId,
+          status: 'user_account', // Status especial para filtrar no admin
+          total: 0,
+          customer: newUserProfile,
+          items: [] // Array vazio para não quebrar admin
+        });
+
+        if (error) {
+          console.error(error);
+          alert("Erro ao criar conta. Tente novamente.");
+        } else {
+          loginUser(newUserProfile);
+          alert("Conta criada com sucesso!");
         }
-
-        // Salva LocalStorage (Backup ou Principal se tabela não existir)
-        localClients.push(newUser);
-        localStorage.setItem('doceeser_local_clients', JSON.stringify(localClients));
-
-        if (!savedToCloud) {
-          console.warn("Conta criada apenas localmente (Tabela Supabase não encontrada).");
-        }
-
-        loginUser(newUser);
       }
     } catch (e) {
       console.error("Auth error:", e);
-      alert("Erro ao processar login.");
+      alert("Erro de conexão.");
     }
   };
 
@@ -462,26 +439,23 @@ export default function App() {
       return alert("Por favor, preencha seus dados de entrega.");
     }
     
-    // Atualizar endereço do usuário se logado (Com Fallback)
-    if (user) {
+    // Atualizar endereço do usuário na nuvem (se logado)
+    if (user && supabase) {
       const newAddress = { rua: customer.rua, numero: customer.numero, bairro: customer.bairro };
+      const userId = `user_${user.phone.replace(/\D/g, '')}`;
       
-      // Tenta atualizar no Supabase
-      if (supabase) {
-        await supabase.from(COLLECTION_CLIENTS).update({ address: newAddress }).eq('phone', user.phone);
-      }
+      // Atualiza o registro "conta" na tabela de pedidos
+      // Precisamos pegar o customer atual e atualizar o endereço dentro do JSON
+      const updatedCustomer = { ...user, address: newAddress };
       
-      // Atualiza no LocalStorage
-      const localClients = JSON.parse(localStorage.getItem('doceeser_local_clients') || '[]');
-      const updatedClients = localClients.map(u => 
-        u.phone === user.phone ? { ...u, address: newAddress } : u
-      );
-      localStorage.setItem('doceeser_local_clients', JSON.stringify(updatedClients));
-      
-      // Atualiza sessão local
-      const updatedUser = { ...user, address: newAddress };
-      setUser(updatedUser);
-      localStorage.setItem('doceeser_user', JSON.stringify(updatedUser));
+      await supabase
+        .from(COLLECTION_ORDERS)
+        .update({ customer: updatedCustomer })
+        .eq('id', userId);
+        
+      // Atualiza localmente
+      setUser(updatedCustomer);
+      localStorage.setItem('doceeser_user', JSON.stringify(updatedCustomer));
     }
 
     setIsProcessingPayment(true);
